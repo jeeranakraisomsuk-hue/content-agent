@@ -2,5 +2,6 @@
 .pnpm-store/
 node_modules/
 .next/
+dist/
 *.local
 *.tsbuildinfo

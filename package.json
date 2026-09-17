@@ -1,10 +1,7 @@
 {
   "name": "indy-content-line-oa-test",
   "private": true,
-  "workspaces": [
-    "apps/indy-content-studio"
-  ],
   "scripts": {
-    "build": "npm --workspace indy-content-studio run build"
+    "build": "node scripts/build-site.mjs"
   }
 }
