@@ -12,4 +12,9 @@ describe("ContentEditor", () => {
     render(<ContentEditor assetState="ready" caption="ข้อความ" />);
     expect(screen.getByRole("button", { name: "ส่งเข้า LINE OA" })).toBeEnabled();
   });
+
+  it("shows PRIK GN as the dedicated LINE recipient", () => {
+    render(<ContentEditor assetState="ready" caption="ข้อความ" />);
+    expect(screen.getByText("ปลายทาง LINE: PRIK GN")).toBeInTheDocument();
+  });
 });

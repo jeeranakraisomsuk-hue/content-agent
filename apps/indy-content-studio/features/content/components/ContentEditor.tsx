@@ -15,6 +15,7 @@ export function ContentEditor({
       <h2 id="content-editor-heading">เตรียมส่งคอนเทนต์</h2>
       <p>ไฟล์: {assetState === "ready" ? "พร้อม" : "ยังไม่พร้อม"}</p>
       <p>แคปชัน: {caption.trim() || "ยังไม่กรอก"}</p>
+      <p>ปลายทาง LINE: PRIK GN</p>
       <button type="button" disabled={!canSend}>
         ส่งเข้า LINE OA
       </button>
