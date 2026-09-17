@@ -57,6 +57,8 @@ The drawer contains the task's production state, asset list, caption, metadata, 
 
 Creating a new task opens a centered **glass modal**. It is intentionally more focused than the drawer and collects title, category, format, owner, objective, file(s), caption, schedule, and notes. The modal uses progressive sections so it stays calm rather than becoming a long generic form.
 
+Creating a task is strictly separate from LINE delivery. Saving or scheduling a new task must never send, queue, or open a LINE confirmation. LINE is only available later from the task detail drawer as an explicit, guarded action.
+
 ## LINE delivery experience
 
 `ส่งเข้า LINE OA` is enabled only when the task includes at least one eligible asset and a non-empty caption.

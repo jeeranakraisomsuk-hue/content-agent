@@ -163,6 +163,8 @@ Expected: FAIL because neither interaction surface exists.
 
 Drawer: render only for a selected task, use `role="dialog"`, preserve the overview behind it, and expose stage, assets, caption, schedule, review, and delivery action. Modal: use a centered glass dialog and progressive sections for identity, production, delivery, and notes. Require title and show an inline validation message on an empty submission.
 
+Ruling: `CreateContentModal` must not import, render, invoke, or pre-open `LineSendConfirmation`; creating or scheduling a task only calls `onCreate(input)`. The LINE confirmation is reachable exclusively from a saved task's detail drawer.
+
 - [ ] **Step 4: Verify and commit**
 
 Run: `pnpm --dir apps/indy-content-studio vitest run tests/task-detail-drawer.test.tsx tests/create-content-modal.test.tsx && pnpm --dir apps/indy-content-studio test`
