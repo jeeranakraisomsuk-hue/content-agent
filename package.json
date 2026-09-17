@@ -1,7 +1,10 @@
 {
   "name": "indy-content-line-oa-test",
   "private": true,
+  "workspaces": [
+    "apps/indy-content-studio"
+  ],
   "scripts": {
-    "build": "pnpm --dir apps/indy-content-studio build"
+    "build": "npm --workspace indy-content-studio run build"
   }
 }
