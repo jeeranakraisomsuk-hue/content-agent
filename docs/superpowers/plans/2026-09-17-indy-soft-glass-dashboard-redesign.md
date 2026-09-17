@@ -14,6 +14,7 @@
 
 - Work only in the isolated reconstructed-source worktree.
 - Preserve the current dashboard destinations and functional scope.
+- Retain automated-post scheduling: platform selection, date/time, Make readiness, and publication receipt status.
 - Desktop is the primary experience; mobile remains readable.
 - Use the approved warm soft-glass system; do not make a smart-home clone or a generic SaaS grid.
 - Rail labels appear on hover and keyboard focus.
@@ -230,4 +231,3 @@ git commit -m "feat: confirm guarded LINE delivery"
 - Spec coverage: Task 1 implements the approved shell; Task 2 the priority-first overview; Task 3 the drawer and centered creation flow; Task 4 the LINE confirmation, all states, and final quality checks.
 - Placeholder scan: no incomplete tasks, placeholder markers, or undefined interfaces.
 - Type consistency: later components consume `DashboardTask` and the workspace interfaces introduced in Tasks 1 and 2.
-

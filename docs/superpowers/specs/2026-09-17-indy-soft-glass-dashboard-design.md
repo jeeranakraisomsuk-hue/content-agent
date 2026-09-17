@@ -77,6 +77,7 @@ The redesign retains the existing functional scope:
 - content creation and editing;
 - priority and production workflow states;
 - calendar and scheduling;
+- automated posting configuration: platforms, publish date/time, Make readiness, and publication receipt status;
 - media upload, asset selection, and library browsing;
 - caption templates and references;
 - review rounds, feedback, and corrections;
@@ -109,4 +110,3 @@ Implementation will be test-first for behavior changes, then verified by:
 2. state coverage for loading, empty, error, disabled, focus, submission, and success cases;
 3. browser visual review against this approved design direction;
 4. a UI-guideline audit for accessibility, performance, and interaction quality.
-
