@@ -26,3 +26,9 @@
 
 - Delivery remains an interface-level guarded workflow; it does not add a real LINE push or change credentials/configuration.
 - The production build emits existing CSS autoprefixer warnings for `start`/`end` flex alignment values. The build completes successfully.
+
+## Follow-up review fix
+
+- Reset the confirmation's transient `ready`/`pending`/`success`/`error` state whenever it closes or receives a different task ID.
+- Added a regression test covering both a successful and failed first submission, then closing and reopening for another eligible task. Each reopened delivery presents an enabled `ยืนยันส่ง` action again.
+- Re-ran the full Vitest suite after the change: 21 test files and 50 tests passed.

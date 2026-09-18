@@ -67,4 +67,22 @@ describe("LineSendConfirmation", () => {
 
     expect(screen.queryByRole("dialog", { name: "ยืนยันการส่งเข้า LINE OA" })).not.toBeInTheDocument();
   });
+
+  it.each([
+    ["success", vi.fn().mockResolvedValueOnce(undefined).mockResolvedValueOnce(undefined)],
+    ["error", vi.fn().mockRejectedValueOnce(new Error("network")).mockResolvedValueOnce(undefined)],
+  ])("resets the %s result when reopened for another eligible task", async (_result, confirm) => {
+    const nextTask = { ...readyTask, id: "carousel", title: "ตรวจคารูเซล", assets: [{ name: "carousel.jpg", type: "image/jpeg", size: 8 }] };
+    const { rerender } = render(<LineSendConfirmation task={readyTask} open onCancel={vi.fn()} onConfirm={confirm} />);
+
+    fireEvent.click(screen.getByRole("button", { name: "ยืนยันส่ง" }));
+    expect(await screen.findByRole(_result === "success" ? "status" : "alert")).toBeVisible();
+
+    rerender(<LineSendConfirmation task={nextTask} open={false} onCancel={vi.fn()} onConfirm={confirm} />);
+    rerender(<LineSendConfirmation task={nextTask} open onCancel={vi.fn()} onConfirm={confirm} />);
+
+    expect(screen.getByRole("button", { name: "ยืนยันส่ง" })).toBeEnabled();
+    fireEvent.click(screen.getByRole("button", { name: "ยืนยันส่ง" }));
+    await waitFor(() => expect(confirm).toHaveBeenCalledTimes(2));
+  });
 });

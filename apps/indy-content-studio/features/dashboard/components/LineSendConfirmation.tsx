@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { canSendToLine } from "../../content/send-eligibility";
 import type { AssetState } from "../../content/send-eligibility";
 import type { DashboardTask } from "../dashboard-model";
@@ -20,6 +20,10 @@ function assetStateFor(task: DashboardTask): AssetState {
 
 export function LineSendConfirmation({ task, open, onCancel, onConfirm }: LineSendConfirmationProps) {
   const [sendState, setSendState] = useState<SendState>("ready");
+
+  useEffect(() => {
+    setSendState("ready");
+  }, [open, task?.id]);
 
   if (!open || !task || !canSendToLine({ assetState: assetStateFor(task), caption: task.caption ?? "" })) {
     return null;
