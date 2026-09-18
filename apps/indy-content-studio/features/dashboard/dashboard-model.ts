@@ -21,6 +21,8 @@ export interface DashboardTask {
   caption?: string;
   notes?: string;
   assets?: ContentAsset[];
+  lineDeliveryStatus?: "sent";
+  lineDeliveryReceipt?: string;
 }
 
 const priorityOrder: Record<TaskPriority, number> = {

@@ -89,8 +89,23 @@ main { width: min(100%, 1100px); margin: 0 auto; padding: 28px 10px; }
 .drawer-actions, .create-modal-actions { display: flex; justify-content: end; gap: 10px; }
 .drawer-secondary-button { border: 1px solid rgba(45,42,39,.16); border-radius: 12px; background: rgba(255,255,255,.45); cursor: pointer; padding: 10px 13px; }
 .drawer-delivery-button { border: 0; border-radius: 12px; background: var(--sage); color: #fff; cursor: pointer; padding: 10px 13px; font-weight: 700; }
+.drawer-delivery-receipt { display: grid; gap: 4px; padding: 12px 14px; border-radius: 16px; background: rgba(135,156,129,.17); color: var(--focus); }
 .create-modal-backdrop { position: fixed; z-index: 5; inset: 0; display: grid; place-items: center; padding: 20px; background: rgba(45,42,39,.2); }
 .create-content-modal { width: min(680px, 100%); max-height: calc(100vh - 40px); overflow: auto; padding: 28px; background: rgba(246, 243, 238, .94); box-shadow: 0 25px 70px rgba(73,58,44,.25); }
+.line-confirmation-backdrop { position: fixed; z-index: 6; inset: 0; display: grid; place-items: center; padding: 20px; background: rgba(45,42,39,.26); }
+.line-send-confirmation { display: grid; width: min(460px, 100%); gap: 16px; padding: 28px; border: 1px solid var(--glass-border); border-radius: 28px; background: rgba(246,243,238,.94); box-shadow: 0 25px 70px rgba(73,58,44,.28); backdrop-filter: blur(24px); }
+.line-send-confirmation h2 { margin: -8px 0 0; }
+.line-confirmation-preview, .line-caption-preview, .line-recipient, .line-send-receipt { border: 1px solid rgba(255,255,255,.72); border-radius: 18px; background: rgba(255,255,255,.38); }
+.line-confirmation-preview { display: flex; align-items: center; gap: 12px; padding: 14px; }
+.line-preview-icon { display: grid; width: 42px; height: 42px; place-items: center; border-radius: 13px; background: rgba(135,156,129,.2); color: var(--focus); font-size: 21px; }
+.line-confirmation-preview div, .line-caption-preview { display: grid; gap: 4px; }
+.line-caption-preview { padding: 14px; }
+.line-caption-preview p { margin: 0; white-space: pre-wrap; }
+.line-recipient { display: flex; justify-content: space-between; padding: 12px 14px; }
+.line-recipient span { color: rgba(45,42,39,.64); }
+.line-confirmation-actions { display: flex; justify-content: end; gap: 10px; }
+.line-send-error { margin: -4px 0 0; color: #a94e42; font-size: 14px; }
+.line-send-receipt { display: grid; gap: 5px; padding: 16px; background: rgba(135,156,129,.18); color: var(--focus); }
 .create-content-modal form { display: grid; gap: 16px; margin-top: 20px; }
 .create-content-modal fieldset { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; margin: 0; padding: 15px; border: 1px solid rgba(255,255,255,.7); border-radius: 17px; background: rgba(255,255,255,.34); }
 .create-content-modal legend { padding: 0 5px; color: var(--focus); font-size: 13px; font-weight: 700; }

@@ -1,4 +1,5 @@
 import type { DashboardTask } from "../dashboard-model";
+import { canSendToLine } from "../../content/send-eligibility";
 
 interface TaskDetailDrawerProps {
   task: DashboardTask | null;
@@ -8,6 +9,10 @@ interface TaskDetailDrawerProps {
 
 export function TaskDetailDrawer({ task, onClose, onRequestSend }: TaskDetailDrawerProps) {
   if (!task) return null;
+  const canSend = canSendToLine({
+    assetState: task.assets?.length ? "ready" : "missing",
+    caption: task.caption ?? "",
+  });
 
   return (
     <aside className="task-drawer" role="dialog" aria-modal="false" aria-label={`รายละเอียด ${task.title}`}>
@@ -43,9 +48,16 @@ export function TaskDetailDrawer({ task, onClose, onRequestSend }: TaskDetailDra
         <p><time>{task.scheduledTime}</time> · เลือกแพลตฟอร์มเมื่อชิ้นงานพร้อม</p>
       </section>
 
+      {task.lineDeliveryStatus === "sent" && (
+        <div className="drawer-delivery-receipt" role="status">
+          <strong>ส่งแล้ว</strong>
+          <span>{task.lineDeliveryReceipt ?? "ส่งเข้า LINE OA เรียบร้อยแล้ว"}</span>
+        </div>
+      )}
+
       <div className="drawer-actions">
         <button type="button" className="drawer-secondary-button">บันทึกร่าง</button>
-        <button type="button" className="drawer-delivery-button" onClick={onRequestSend}>ส่งเข้า LINE OA</button>
+        <button type="button" className="drawer-delivery-button" onClick={onRequestSend} disabled={!canSend}>ส่งเข้า LINE OA</button>
       </div>
     </aside>
   );

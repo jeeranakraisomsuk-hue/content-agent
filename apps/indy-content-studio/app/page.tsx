@@ -5,6 +5,7 @@ import { DashboardPreview } from "../features/dashboard/components/DashboardPrev
 import { TodayOverview, type TodayOverviewState } from "../features/dashboard/components/TodayOverview";
 import { CreateContentModal, type CreateContentInput } from "../features/dashboard/components/CreateContentModal";
 import { TaskDetailDrawer } from "../features/dashboard/components/TaskDetailDrawer";
+import { LineSendConfirmation } from "../features/dashboard/components/LineSendConfirmation";
 import type { DashboardTask } from "../features/dashboard/dashboard-model";
 import { useDashboardWorkspace } from "../features/dashboard/useDashboardWorkspace";
 import { useState } from "react";
@@ -20,6 +21,7 @@ export default function HomePage() {
   const workspace = useDashboardWorkspace(todayTasks);
   const [todayState, setTodayState] = useState<TodayOverviewState>("ready");
   const [continuationNotice, setContinuationNotice] = useState<string | null>(null);
+  const [isLineConfirmationOpen, setLineConfirmationOpen] = useState(false);
   const selectedTask = todayTasks.find((task) => task.id === workspace.selectedTaskId);
 
   function continueSelectedTask() {
@@ -71,7 +73,26 @@ export default function HomePage() {
           <p className="selected-workflow-hint" aria-live="polite">เลือกงานเพื่อเปิดขั้นตอนการทำงาน</p>
         )}
         <DashboardPreview />
-        <TaskDetailDrawer task={selectedTask ?? null} onClose={workspace.closeTask} onRequestSend={() => undefined} />
+        <TaskDetailDrawer
+          task={selectedTask ?? null}
+          onClose={() => {
+            setLineConfirmationOpen(false);
+            workspace.closeTask();
+          }}
+          onRequestSend={() => setLineConfirmationOpen(true)}
+        />
+        <LineSendConfirmation
+          task={selectedTask ?? null}
+          open={isLineConfirmationOpen}
+          onCancel={() => setLineConfirmationOpen(false)}
+          onConfirm={async () => {
+            if (!selectedTask) return;
+
+            setTodayTasks((current) => current.map((task) => task.id === selectedTask.id
+              ? { ...task, lineDeliveryStatus: "sent", lineDeliveryReceipt: "ส่งถึง PRIK GN แล้ว" }
+              : task));
+          }}
+        />
         <CreateContentModal open={workspace.isCreateOpen} onClose={() => workspace.setCreateOpen(false)} onCreate={createTask} />
       </main>
     </AppShell>

@@ -44,4 +44,28 @@ describe("TaskDetailDrawer", () => {
 
     expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
   });
+
+  it("keeps LINE delivery disabled and cannot request confirmation when the saved task is ineligible", () => {
+    const requestSend = vi.fn();
+
+    render(<TaskDetailDrawer task={{ ...task, assets: [], caption: "" }} onClose={vi.fn()} onRequestSend={requestSend} />);
+
+    const send = screen.getByRole("button", { name: "ส่งเข้า LINE OA" });
+    expect(send).toBeDisabled();
+    fireEvent.click(send);
+    expect(requestSend).not.toHaveBeenCalled();
+  });
+
+  it("keeps a completed LINE delivery receipt in the saved task workflow", () => {
+    render(
+      <TaskDetailDrawer
+        task={{ ...task, lineDeliveryStatus: "sent", lineDeliveryReceipt: "ส่งถึง PRIK GN แล้ว" }}
+        onClose={vi.fn()}
+        onRequestSend={vi.fn()}
+      />,
+    );
+
+    expect(screen.getByText("ส่งแล้ว")).toBeVisible();
+    expect(screen.getByText("ส่งถึง PRIK GN แล้ว")).toBeVisible();
+  });
 });
