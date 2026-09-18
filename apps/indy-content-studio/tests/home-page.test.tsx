@@ -1,10 +1,11 @@
 import { fireEvent, render, screen, within } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
 import { HomePage } from "../app/home-page-view";
+import { MemoryDashboardRepository } from "../features/data/memory-dashboard-repository";
 
 describe("HomePage", () => {
   it("keeps Today as the only page heading and exposes the selected task continuation", () => {
-    render(<HomePage />);
+    render(<HomePage repository={new MemoryDashboardRepository()} />);
 
     expect(screen.getAllByRole("heading", { level: 1 })).toHaveLength(1);
 
@@ -16,7 +17,7 @@ describe("HomePage", () => {
   });
 
   it("keeps newly created task details and assets available in its drawer", () => {
-    render(<HomePage />);
+    render(<HomePage repository={new MemoryDashboardRepository()} />);
     const asset = new File(["image"], "cover.jpg", { type: "image/jpeg" });
 
     fireEvent.click(screen.getByRole("button", { name: "สร้างชิ้นงานใหม่" }));
@@ -33,18 +34,18 @@ describe("HomePage", () => {
     expect(within(drawer).getByText("2026-09-18T14:30")).toBeVisible();
   });
 
-  it("opens a clear deferred workspace when a rail destination has no existing surface", () => {
-    render(<HomePage />);
+  it("opens the working calendar workspace from the rail", async () => {
+    render(<HomePage repository={new MemoryDashboardRepository()} />);
 
     fireEvent.click(screen.getByRole("button", { name: "ปฏิทินคอนเทนต์" }));
 
+    expect(await screen.findByLabelText("เดือนปฏิทิน")).toBeVisible();
     expect(screen.getByRole("heading", { name: "ปฏิทินคอนเทนต์" })).toBeVisible();
-    expect(screen.getByText("กำลังจัดเตรียมพื้นที่งานนี้")).toBeVisible();
     expect(screen.getByRole("button", { name: "ปฏิทินคอนเทนต์" })).toHaveAttribute("aria-current", "page");
   });
 
   it("shows the existing production board as its own workspace", () => {
-    render(<HomePage />);
+    render(<HomePage repository={new MemoryDashboardRepository()} />);
 
     fireEvent.click(screen.getByRole("button", { name: "บอร์ดการผลิต" }));
 

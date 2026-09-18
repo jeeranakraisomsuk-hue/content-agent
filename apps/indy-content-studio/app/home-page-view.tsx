@@ -17,6 +17,10 @@ import { SettingsWorkspace } from "../features/settings/components/SettingsWorks
 import { MediaLibraryWorkspace } from "../features/media/components/MediaLibraryWorkspace";
 import { ReferencesWorkspace } from "../features/references/components/ReferencesWorkspace";
 import { CaptionTemplatesWorkspace } from "../features/captions/components/CaptionTemplatesWorkspace";
+import { ContentEditorDialog } from "../features/content/components/ContentEditorDialog";
+import { OverviewWorkspace } from "../features/overview/components/OverviewWorkspace";
+import { ContentCalendarWorkspace } from "../features/calendar/components/ContentCalendarWorkspace";
+import { ActionPlanWorkspace } from "../features/action-plan/components/ActionPlanWorkspace";
 
 const initialTasks: DashboardTask[] = [
   { id: "reels", title: "ตัดต่อคลิป Reels เทคนิคทรงผม", priority: "urgent", scheduledTime: "10:30", workflowStage: "ตัดต่อ", lastWorkedAt: "2026-09-18T10:18:00.000Z" },
@@ -48,6 +52,7 @@ function HomePageContent() {
   const [activeWorkspace, setActiveWorkspace] = useState<WorkspaceItem>("overview");
   const [continuationNotice, setContinuationNotice] = useState<string | null>(null);
   const [isLineConfirmationOpen, setLineConfirmationOpen] = useState(false);
+  const [isFullEditorOpen, setFullEditorOpen] = useState(false);
   const selectedTask = todayTasks.find((task) => task.id === workspace.selectedTaskId);
 
   function continueSelectedTask() {
@@ -81,6 +86,9 @@ function HomePageContent() {
         <button type="button" className="create-task-button" onClick={() => workspace.setCreateOpen(true)}>สร้างชิ้นงานใหม่</button>
         {selectedTask ? <section className="selected-workflow" aria-label={`ทำงานต่อกับ ${selectedTask.title}`}><p className="eyebrow">กำลังทำงานต่อ</p><h2>{selectedTask.title}</h2><p>ขั้นตอนปัจจุบัน: {selectedTask.workflowStage}</p><button type="button" className="continue-work-button" onClick={continueSelectedTask}>ดำเนินงานต่อที่ขั้นตอน {selectedTask.workflowStage}</button>{continuationNotice && <p className="continuation-notice" role="status">{continuationNotice}</p>}</section> : <p className="selected-workflow-hint" aria-live="polite">เลือกงานเพื่อเปิดขั้นตอนการทำงาน</p>}
         <DashboardPreview />
+        <OverviewWorkspace />
+        <button type="button" className="create-task-button" onClick={() => setFullEditorOpen(true)}>เปิดตัวแก้ไขคอนเทนต์เต็ม</button>
+        <ContentEditorDialog mode={selectedTask ? "edit" : "create"} contentId={selectedTask?.id} open={isFullEditorOpen} onClose={() => setFullEditorOpen(false)} />
         <TaskDetailDrawer task={selectedTask ?? null} onClose={() => { setLineConfirmationOpen(false); workspace.closeTask(); }} onRequestSend={() => setLineConfirmationOpen(true)} />
         <LineSendConfirmation task={selectedTask ?? null} open={isLineConfirmationOpen} onCancel={() => setLineConfirmationOpen(false)} onConfirm={async () => {
           if (!selectedTask) return;
@@ -95,7 +103,9 @@ function HomePageContent() {
       {activeWorkspace === "media-library" && <MediaLibraryWorkspace />}
       {activeWorkspace === "references" && <ReferencesWorkspace />}
       {activeWorkspace === "caption-templates" && <CaptionTemplatesWorkspace />}
-      {activeWorkspace !== "overview" && activeWorkspace !== "production-board" && activeWorkspace !== "settings" && activeWorkspace !== "media-library" && activeWorkspace !== "references" && activeWorkspace !== "caption-templates" && <DeferredWorkspace item={activeWorkspace} />}
+      {activeWorkspace === "calendar" && <ContentCalendarWorkspace />}
+      {activeWorkspace === "action-plan" && <ActionPlanWorkspace />}
+      {activeWorkspace !== "overview" && activeWorkspace !== "production-board" && activeWorkspace !== "settings" && activeWorkspace !== "media-library" && activeWorkspace !== "references" && activeWorkspace !== "caption-templates" && activeWorkspace !== "calendar" && activeWorkspace !== "action-plan" && <DeferredWorkspace item={activeWorkspace} />}
     </main>
   </AppShell>;
 }
