@@ -103,6 +103,24 @@ describe("MediaLibraryWorkspace", () => {
     });
   });
 
+  it("returns to local-only when the server says Drive is disconnected", async () => {
+    const state = createEmptyDashboardState();
+    state.integrations.find(({ provider }) => provider === "google-drive")!.status = "connected";
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(Response.json(
+      { error: "ยังไม่ได้เชื่อมต่อ Google Drive" },
+      { status: 503 },
+    )));
+    const { blobStore, repository } = renderLibrary(state);
+
+    fireEvent.change(await screen.findByLabelText("เลือกไฟล์สื่อ"), { target: { files: [new File(["image"], "ยังอยู่ในเครื่อง.jpg", { type: "image/jpeg" })] } });
+
+    expect(await screen.findByText("เก็บไว้ในเครื่องนี้เท่านั้น")).toBeVisible();
+    const [asset] = (await repository.read()).media;
+    expect(asset).toMatchObject({ remoteStatus: "local-only", providerFileId: null, previewProviderFileId: null });
+    expect(await blobStore.get(asset.id)).not.toBeNull();
+    expect(screen.queryByRole("button", { name: `ลองอัปโหลด ${asset.name} อีกครั้ง` })).not.toBeInTheDocument();
+  });
+
   it("retains a failed local upload and retries without claiming provider success", async () => {
     const state = createEmptyDashboardState();
     state.integrations.find(({ provider }) => provider === "google-drive")!.status = "connected";

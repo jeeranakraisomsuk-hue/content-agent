@@ -96,6 +96,10 @@ export function MediaLibraryWorkspace({ blobStore }: { blobStore?: MediaBlobStor
 
       const response = await fetch("/api/media/upload", { method: "POST", body: form });
       const result: unknown = await response.json().catch(() => null);
+      if (response.status === 503) {
+        await setRemoteState(asset.id, { remoteStatus: "local-only", providerFileId: null, previewProviderFileId: null });
+        return;
+      }
       if (!response.ok || !isProviderUploadResult(result, asset.id)) throw new Error("provider-upload-failed");
 
       await setRemoteState(asset.id, {
