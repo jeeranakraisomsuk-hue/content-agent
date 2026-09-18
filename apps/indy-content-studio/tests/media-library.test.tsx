@@ -213,6 +213,36 @@ describe("MediaLibraryWorkspace", () => {
     expect((await repository.read()).media[0]).toMatchObject({ remoteStatus: "ready", providerFileId: "drive-race" });
   });
 
+  it("keeps an in-flight attempt locked across a media workspace remount", async () => {
+    const now = "2026-09-18T00:00:00.000Z";
+    const state = createUploadedMedia(createEmptyDashboardState(), { id: "asset-remount", name: "ข้ามหน้า.jpg", mimeType: "image/jpeg", size: 5, now });
+    state.media[0].remoteStatus = "uploading";
+    const repository = new MemoryDashboardRepository(state);
+    const blobStore = new TestBlobStore();
+    await blobStore.put("asset-remount", new File(["image"], "ข้ามหน้า.jpg", { type: "image/jpeg" }));
+    let resolveUpload!: (response: Response) => void;
+    const fetcher = vi.fn()
+      .mockResolvedValueOnce(integrationHealth())
+      .mockImplementationOnce(() => new Promise<Response>((resolve) => { resolveUpload = resolve; }));
+    vi.stubGlobal("fetch", fetcher);
+    const firstView = renderLibrary(state, repository, blobStore);
+
+    fireEvent.click(await screen.findByRole("button", { name: "ลองอัปโหลด ข้ามหน้า.jpg อีกครั้ง" }));
+    await waitFor(() => expect(fetcher).toHaveBeenCalledTimes(2));
+    firstView.unmount();
+    renderLibrary(await repository.read(), repository, blobStore);
+
+    expect(await screen.findByText("กำลังอัปโหลดไป Google Drive…")).toBeVisible();
+    expect(screen.queryByRole("button", { name: "ลองอัปโหลด ข้ามหน้า.jpg อีกครั้ง" })).not.toBeInTheDocument();
+    resolveUpload(Response.json({ error: "อัปโหลดไป Google Drive ไม่สำเร็จ" }, { status: 502 }));
+
+    expect(await screen.findByRole("button", { name: "ลองอัปโหลด ข้ามหน้า.jpg อีกครั้ง" })).toBeVisible();
+    fetcher.mockResolvedValueOnce(integrationHealth());
+    fetcher.mockResolvedValueOnce(Response.json({ assetId: "asset-remount", providerFileId: "drive-remount", previewProviderFileId: "drive-remount", remoteStatus: "ready" }));
+    fireEvent.click(screen.getByRole("button", { name: "ลองอัปโหลด ข้ามหน้า.jpg อีกครั้ง" }));
+    expect(await screen.findByText("พร้อมใช้ผ่าน Google Drive")).toBeVisible();
+  });
+
   it("keeps the local blob when a provider-state write fails after metadata was committed", async () => {
     class FailingProviderStateRepository extends MemoryDashboardRepository {
       private writes = 0;

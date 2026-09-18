@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useDashboardData } from "../../data/DashboardDataProvider";
 import type { MediaAsset } from "../../domain/types";
 import { createExternalMedia, createUploadedMedia, moveMediaToTrash, restoreMedia, updateMedia } from "../media-commands";
@@ -17,6 +17,12 @@ type ProviderUploadResult = {
 };
 
 const videoFileExtensions = new Set(["3gp", "avi", "m4v", "mkv", "mov", "mp4", "mpeg", "mpg", "ogv", "webm"]);
+const activeProviderAttempts = new Map<string, symbol>();
+const providerAttemptListeners = new Set<() => void>();
+
+function notifyProviderAttemptListeners() {
+  providerAttemptListeners.forEach((listener) => listener());
+}
 
 const remoteStatusLabels: Record<MediaAsset["remoteStatus"], string> = {
   "local-only": "เก็บไว้ในเครื่องนี้เท่านั้น",
@@ -81,8 +87,13 @@ export function MediaLibraryWorkspace({ blobStore }: { blobStore?: MediaBlobStor
   const [externalKind, setExternalKind] = useState("video/mp4");
   const [preview, setPreview] = useState<MediaAsset | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const activeProviderAttempts = useRef(new Map<string, symbol>());
   const [, setAttemptRevision] = useState(0);
+
+  useEffect(() => {
+    const listener = () => setAttemptRevision((revision) => revision + 1);
+    providerAttemptListeners.add(listener);
+    return () => { providerAttemptListeners.delete(listener); };
+  }, []);
 
   if (!dashboard.state) {
     return <section aria-labelledby="media-heading"><h1 id="media-heading">คลังสื่อ</h1><p>กำลังโหลดข้อมูล…</p></section>;
@@ -100,11 +111,11 @@ export function MediaLibraryWorkspace({ blobStore }: { blobStore?: MediaBlobStor
   }
 
   async function uploadToProvider(asset: MediaAsset, source: Blob) {
-    if (activeProviderAttempts.current.has(asset.id)) return;
+    if (activeProviderAttempts.has(asset.id)) return;
     const attempt = Symbol(asset.id);
-    activeProviderAttempts.current.set(asset.id, attempt);
-    setAttemptRevision((revision) => revision + 1);
-    const isCurrentAttempt = () => activeProviderAttempts.current.get(asset.id) === attempt;
+    activeProviderAttempts.set(asset.id, attempt);
+    notifyProviderAttemptListeners();
+    const isCurrentAttempt = () => activeProviderAttempts.get(asset.id) === attempt;
 
     try {
       await setRemoteState(asset.id, { remoteStatus: "uploading", providerFileId: null, previewProviderFileId: null });
@@ -154,8 +165,8 @@ export function MediaLibraryWorkspace({ blobStore }: { blobStore?: MediaBlobStor
       }
     } finally {
       if (isCurrentAttempt()) {
-        activeProviderAttempts.current.delete(asset.id);
-        setAttemptRevision((revision) => revision + 1);
+        activeProviderAttempts.delete(asset.id);
+        notifyProviderAttemptListeners();
       }
     }
   }
@@ -264,7 +275,7 @@ export function MediaLibraryWorkspace({ blobStore }: { blobStore?: MediaBlobStor
           {tab === "all" && <>
             <button type="button" onClick={() => setPreview(asset)}>ดูตัวอย่าง</button>
             <button type="button" onClick={() => void editTags(asset)}>แก้แท็ก</button>
-            {(asset.remoteStatus === "failed" || asset.remoteStatus === "uploading") && !activeProviderAttempts.current.has(asset.id) && <button type="button" onClick={() => void retryProviderUpload(asset)} aria-label={`ลองอัปโหลด ${asset.name} อีกครั้ง`}>ลองอีกครั้ง</button>}
+            {(asset.remoteStatus === "failed" || asset.remoteStatus === "uploading") && !activeProviderAttempts.has(asset.id) && <button type="button" onClick={() => void retryProviderUpload(asset)} aria-label={`ลองอัปโหลด ${asset.name} อีกครั้ง`}>ลองอีกครั้ง</button>}
             <button type="button" onClick={() => void trash(asset)} aria-label={`ย้าย ${asset.name} ไปถังขยะ`}>ถังขยะ</button>
           </>}
           {tab === "trash" && <button type="button" onClick={() => void restore(asset)} aria-label={`กู้คืน ${asset.name}`}>กู้คืน</button>}
