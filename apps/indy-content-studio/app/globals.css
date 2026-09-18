@@ -98,6 +98,11 @@ main { width: min(100%, 1100px); margin: 0 auto; padding: 28px 10px; }
 .create-content-modal label:has(textarea) { grid-column: 1 / -1; }
 .create-content-modal input, .create-content-modal select, .create-content-modal textarea { width: 100%; padding: 9px 10px; border: 1px solid rgba(45,42,39,.16); border-radius: 10px; background: rgba(255,255,255,.7); color: var(--ink); }
 .create-content-modal textarea { min-height: 68px; resize: vertical; }
+.selected-assets { grid-column: 1 / -1; display: flex; flex-wrap: wrap; gap: 7px; margin: 0; padding: 0; list-style: none; }
+.selected-assets li, .drawer-assets li { padding: 5px 8px; border-radius: 9px; background: rgba(135,156,129,.16); color: var(--focus); font-size: 12px; }
+.drawer-assets { margin-top: 14px; }
+.drawer-assets ul { display: flex; flex-wrap: wrap; gap: 7px; margin: 7px 0 0; padding: 0; list-style: none; }
+.drawer-assets p:last-child { margin: 7px 0 0; color: rgba(45,42,39,.62); }
 .field-error { grid-column: 1 / -1; margin: 0; color: #8b4439; font-size: 13px; }
 .create-submit-button { padding: 10px 15px; }
 .dashboard-preview { display: grid; gap: 24px; }

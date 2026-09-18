@@ -9,6 +9,13 @@ const task: DashboardTask = {
   priority: "urgent",
   scheduledTime: "10:30",
   workflowStage: "ตัดต่อ",
+  category: "รีวิว",
+  format: "Reels",
+  owner: "ฟิว",
+  objective: "เพิ่มยอดเข้าชม",
+  caption: "แคปชันตัวอย่าง",
+  notes: "ใช้ฉบับที่อนุมัติแล้ว",
+  assets: [{ name: "review-reels.mp4", type: "video/mp4", size: 5 }],
 };
 
 describe("TaskDetailDrawer", () => {
@@ -21,6 +28,9 @@ describe("TaskDetailDrawer", () => {
     expect(screen.getByRole("dialog", { name: "รายละเอียด ตัดต่อคลิป Reels" })).toBeVisible();
     expect(screen.getByText("ตัดต่อ")).toBeVisible();
     expect(screen.getByText("10:30")).toBeVisible();
+    expect(screen.getByText("review-reels.mp4")).toBeVisible();
+    expect(screen.getByText("แคปชันตัวอย่าง")).toBeVisible();
+    expect(screen.getByText("ฟิว · Reels · รีวิว")).toBeVisible();
 
     fireEvent.click(screen.getByRole("button", { name: "ส่งเข้า LINE OA" }));
     expect(requestSend).toHaveBeenCalledOnce();

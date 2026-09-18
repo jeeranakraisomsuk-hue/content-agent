@@ -1,5 +1,11 @@
 export type TaskPriority = "urgent" | "high" | "normal" | "low";
 
+export interface ContentAsset {
+  name: string;
+  type: string;
+  size: number;
+}
+
 export interface DashboardTask {
   id: string;
   title: string;
@@ -8,6 +14,13 @@ export interface DashboardTask {
   workflowStage?: string;
   lastWorkedAt?: string;
   isComplete?: boolean;
+  category?: string;
+  format?: string;
+  owner?: string;
+  objective?: string;
+  caption?: string;
+  notes?: string;
+  assets?: ContentAsset[];
 }
 
 const priorityOrder: Record<TaskPriority, number> = {

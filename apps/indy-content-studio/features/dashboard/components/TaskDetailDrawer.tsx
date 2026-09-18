@@ -27,10 +27,15 @@ export function TaskDetailDrawer({ task, onClose, onRequestSend }: TaskDetailDra
       <section className="drawer-section" aria-labelledby="drawer-production-heading">
         <h3 id="drawer-production-heading">การผลิต</h3>
         <dl>
-          <div><dt>ไฟล์งาน</dt><dd>ยังไม่ได้แนบไฟล์</dd></div>
-          <div><dt>แคปชัน</dt><dd>เตรียมแคปชันก่อนส่งตรวจ</dd></div>
-          <div><dt>ผู้ตรวจ</dt><dd>รอตรวจทาน</dd></div>
+          <div><dt>รูปแบบ</dt><dd>{[task.owner, task.format, task.category].filter(Boolean).join(" · ") || "ยังไม่ระบุ"}</dd></div>
+          <div><dt>เป้าหมาย</dt><dd>{task.objective || "ยังไม่ระบุ"}</dd></div>
+          <div><dt>แคปชัน</dt><dd>{task.caption || "ยังไม่ได้เขียนแคปชัน"}</dd></div>
+          <div><dt>โน้ต</dt><dd>{task.notes || "ไม่มีโน้ตเพิ่มเติม"}</dd></div>
         </dl>
+        <div className="drawer-assets">
+          <p className="panel-label">ไฟล์งาน</p>
+          {task.assets?.length ? <ul>{task.assets.map((asset) => <li key={`${asset.name}-${asset.size}`}>{asset.name}</li>)}</ul> : <p>ยังไม่ได้แนบไฟล์</p>}
+        </div>
       </section>
 
       <section className="drawer-section" aria-labelledby="drawer-schedule-heading">

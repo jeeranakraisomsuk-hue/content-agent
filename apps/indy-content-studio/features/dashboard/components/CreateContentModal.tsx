@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, type FormEvent } from "react";
+import type { ContentAsset } from "../dashboard-model";
 
 export interface CreateContentInput {
   title: string;
@@ -11,6 +12,7 @@ export interface CreateContentInput {
   caption: string;
   scheduledTime: string;
   notes: string;
+  assets: ContentAsset[];
 }
 
 interface CreateContentModalProps {
@@ -28,6 +30,7 @@ const initialInput: CreateContentInput = {
   caption: "",
   scheduledTime: "",
   notes: "",
+  assets: [],
 };
 
 export function CreateContentModal({ open, onClose, onCreate }: CreateContentModalProps) {
@@ -49,6 +52,11 @@ export function CreateContentModal({ open, onClose, onCreate }: CreateContentMod
     }
 
     onCreate({ ...input, title: input.title.trim() });
+  }
+
+  function selectAssets(files: FileList | null) {
+    const assets = Array.from(files ?? []).map(({ name, type, size }) => ({ name, type, size }));
+    setInput((current) => ({ ...current, assets }));
   }
 
   return (
@@ -74,6 +82,8 @@ export function CreateContentModal({ open, onClose, onCreate }: CreateContentMod
 
           <fieldset>
             <legend>2 · การผลิต</legend>
+            <label>ไฟล์แนบ<input type="file" multiple onChange={(event) => selectAssets(event.target.files)} /></label>
+            {input.assets.length > 0 && <ul className="selected-assets" aria-label="ไฟล์ที่เลือก">{input.assets.map((asset) => <li key={`${asset.name}-${asset.size}`}>{asset.name}</li>)}</ul>}
             <label>เป้าหมาย<textarea value={input.objective} onChange={(event) => updateField("objective", event.target.value)} /></label>
             <label>แคปชัน<textarea value={input.caption} onChange={(event) => updateField("caption", event.target.value)} /></label>
           </fieldset>

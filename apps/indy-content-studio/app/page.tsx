@@ -29,14 +29,13 @@ export default function HomePage() {
   }
 
   function createTask(input: CreateContentInput) {
-    const scheduledTime = input.scheduledTime ? new Date(input.scheduledTime).toLocaleTimeString("th-TH", { hour: "2-digit", minute: "2-digit" }) : "ยังไม่กำหนด";
     const task: DashboardTask = {
       id: `task-${Date.now()}`,
-      title: input.title,
       priority: "normal",
-      scheduledTime,
       workflowStage: "วางแผน",
       lastWorkedAt: new Date().toISOString(),
+      ...input,
+      scheduledTime: input.scheduledTime || "ยังไม่กำหนด",
     };
 
     setTodayTasks((current) => [...current, task]);

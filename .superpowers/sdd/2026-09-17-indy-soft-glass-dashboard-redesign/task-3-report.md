@@ -25,3 +25,16 @@
 ## Scope and follow-up
 
 No LINE configuration or confirmation implementation was changed. The drawer's `onRequestSend` callback is intentionally a no-op at page level until Task 4 supplies the guarded confirmation flow. Task creation remains isolated from that flow by construction.
+
+## Review follow-up: creation data and assets
+
+- Added a shared `ContentAsset` metadata type and extended `DashboardTask` with the Task 3 creation fields: category, format, owner, objective, caption, scheduledTime, notes, and assets.
+- The centered creation modal now offers an accessible, multiple-file `ไฟล์แนบ` input and announces selected file names before submission.
+- Submitting preserves the complete `CreateContentInput` payload in the newly created task without reformatting the scheduled-time value. The selected task opens immediately in the drawer.
+- The drawer now presents real task metadata, caption, notes, and selected asset names rather than generic production placeholders.
+- Creation remains separate from LINE: neither the modal nor page creation handler imports, renders, opens, or invokes a confirmation component.
+
+### Follow-up verification
+
+- Focused tests (`create-content-modal`, `task-detail-drawer`, `home-page`): 3 files / 7 tests passed.
+- Full `vitest run`: all 19 test files passed.
