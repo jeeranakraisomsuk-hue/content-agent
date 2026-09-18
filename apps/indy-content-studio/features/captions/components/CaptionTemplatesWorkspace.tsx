@@ -3,6 +3,8 @@
 import { useState } from "react";
 import type { CaptionTemplate, CaptionTemplateVersion } from "../../domain/types";
 import { useDashboardData } from "../../data/DashboardDataProvider";
+import { contentToDraft, saveContentDraft } from "../../content/content-commands";
+import { AccessibleDialog } from "../../shared/components/AccessibleDialog";
 import { addCaptionTemplate, addCaptionTemplateVersion, renameCaptionTemplate } from "../template-commands";
 import { TemplatePreviewDialog } from "./TemplatePreviewDialog";
 
@@ -56,7 +58,7 @@ export function CaptionTemplatesWorkspace() {
       await dashboard.mutate((state) => ({
         ...state,
         captionTemplates: state.captionTemplates.map((template) => template.id === versionTarget.id
-          ? addCaptionTemplateVersion(template, { id: `${template.id}-v${template.versions.length + 1}`, body, now: new Date().toISOString() })
+          ? addCaptionTemplateVersion(template, { id: `${template.id}-v${Math.max(0, ...template.versions.map((item) => item.version)) + 1}`, body, now: new Date().toISOString() })
           : template),
       }));
       setError(null);
@@ -70,9 +72,13 @@ export function CaptionTemplatesWorkspace() {
   async function applyCaption(contentId: string, caption: string, values: Record<string, string>) {
     if (!preview) return;
     const source = { templateId: preview.template.id, versionId: preview.version.id, values: { ...values } };
+    const now = new Date().toISOString();
     await dashboard.mutate((state) => ({
       ...state,
-      contents: state.contents.map((content) => content.id === contentId ? { ...content, caption, captionSource: source, updatedAt: new Date().toISOString() } : content),
+      contents: state.contents.map((content) => {
+        if (content.id !== contentId) return content;
+        return { ...saveContentDraft(content, { ...contentToDraft(content), caption }, now), captionSource: source };
+      }),
     }));
   }
 
@@ -90,15 +96,15 @@ export function CaptionTemplatesWorkspace() {
     {(error || dashboard.error) && <p role="alert" className="settings-notice error">{error ?? dashboard.error?.message}</p>}
     {templates.length === 0 ? <p className="overview-state">ยังไม่มีแม่แบบแคปชั่น</p> : <div className="template-grid">{templates.map((template) => {
       const version = activeVersion(template);
-      return <article key={template.id} className="settings-item"><div className="settings-item-main"><strong>{template.name}</strong><span>เวอร์ชันปัจจุบัน {version.version}</span><span className="settings-meta">ตัวแปร: {version.variables.length ? version.variables.join(", ") : "ไม่มี"}</span><code>{version.body}</code><details open><summary>ประวัติเวอร์ชัน</summary>{template.versions.map((item) => <div key={item.id}><strong>เวอร์ชัน {item.version}</strong><p>{item.body}</p></div>)}</details></div><div className="settings-item-actions"><button type="button" aria-label={`ดูตัวอย่าง ${template.name}`} onClick={() => setPreview({ template, version })}>ดูตัวอย่าง</button><button type="button" aria-label={`เปลี่ยนชื่อ ${template.name}`} onClick={() => { setError(null); setRenameTarget(template); setName(template.name); }}>เปลี่ยนชื่อ</button><button type="button" aria-label={`สร้างเวอร์ชันใหม่ ${template.name}`} onClick={() => { setError(null); setVersionTarget(template); setBody(version.body); }}>สร้างเวอร์ชันใหม่</button></div></article>;
+      return <article key={template.id} className="settings-item"><div className="settings-item-main"><strong>{template.name}</strong><span>เวอร์ชันปัจจุบัน {version.version}</span><span className="settings-meta">ตัวแปร: {version.variables.length ? version.variables.join(", ") : "ไม่มี"}</span><time className="settings-meta" dateTime={template.updatedAt}>อัปเดตล่าสุด: {template.updatedAt}</time><code>{version.body}</code><details open><summary>ประวัติเวอร์ชัน</summary>{template.versions.map((item) => <div key={item.id}><strong>เวอร์ชัน {item.version}</strong><p>{item.body}</p></div>)}</details></div><div className="settings-item-actions"><button type="button" aria-label={`ดูตัวอย่าง ${template.name}`} onClick={() => setPreview({ template, version })}>ดูตัวอย่าง</button><button type="button" aria-label={`เปลี่ยนชื่อ ${template.name}`} onClick={() => { setError(null); setRenameTarget(template); setName(template.name); }}>เปลี่ยนชื่อ</button><button type="button" aria-label={`สร้างเวอร์ชันใหม่ ${template.name}`} onClick={() => { setError(null); setVersionTarget(template); setBody(version.body); }}>สร้างเวอร์ชันใหม่</button></div></article>;
     })}</div>}
     {createOpen && <TemplateFormDialog title="เพิ่มแม่แบบแคปชั่น" name={name} body={body} onName={setName} onBody={setBody} onCancel={closeCreate} onSave={() => void createTemplate()} saveLabel="บันทึกแม่แบบ" />}
-    {renameTarget && <div className="settings-dialog-backdrop"><section className="settings-dialog" role="dialog" aria-modal="true" aria-labelledby="rename-template-heading"><h2 id="rename-template-heading">เปลี่ยนชื่อแม่แบบ</h2><label>ชื่อแม่แบบ<input value={name} onChange={(event) => setName(event.target.value)} /></label><div className="settings-dialog-actions"><button type="button" onClick={() => setRenameTarget(null)}>ยกเลิก</button><button type="button" onClick={() => void renameTemplate()}>บันทึกชื่อ</button></div></section></div>}
+    {renameTarget && <AccessibleDialog labelledBy="rename-template-heading" onClose={() => setRenameTarget(null)}><h2 id="rename-template-heading">เปลี่ยนชื่อแม่แบบ</h2><label>ชื่อแม่แบบ<input data-dialog-initial-focus value={name} onChange={(event) => setName(event.target.value)} /></label><div className="settings-dialog-actions"><button type="button" onClick={() => setRenameTarget(null)}>ยกเลิก</button><button type="button" onClick={() => void renameTemplate()}>บันทึกชื่อ</button></div></AccessibleDialog>}
     {versionTarget && <TemplateFormDialog title="สร้างเวอร์ชันใหม่" name={versionTarget.name} body={body} onName={() => undefined} onBody={setBody} onCancel={() => setVersionTarget(null)} onSave={() => void addVersion()} saveLabel="บันทึกเวอร์ชันใหม่" versionOnly />}
     {preview && <TemplatePreviewDialog key={preview.version.id} template={preview.template} version={preview.version} contents={contents} onApply={applyCaption} onClose={() => setPreview(null)} />}
   </section>;
 }
 
 function TemplateFormDialog({ title, name, body, onName, onBody, onCancel, onSave, saveLabel, versionOnly = false }: { title: string; name: string; body: string; onName: (value: string) => void; onBody: (value: string) => void; onCancel: () => void; onSave: () => void; saveLabel: string; versionOnly?: boolean }) {
-  return <div className="settings-dialog-backdrop"><section className="settings-dialog" role="dialog" aria-modal="true" aria-labelledby="template-dialog-heading"><h2 id="template-dialog-heading">{title}</h2>{!versionOnly && <label>ชื่อแม่แบบ<input value={name} onChange={(event) => onName(event.target.value)} /></label>}<label>{versionOnly ? "เนื้อหาเวอร์ชันใหม่" : "เนื้อหาแม่แบบ"}<textarea value={body} onChange={(event) => onBody(event.target.value)} /></label><div className="settings-dialog-actions"><button type="button" onClick={onCancel}>ยกเลิก</button><button type="button" onClick={onSave}>{saveLabel}</button></div></section></div>;
+  return <AccessibleDialog labelledBy="template-dialog-heading" onClose={onCancel}><h2 id="template-dialog-heading">{title}</h2>{!versionOnly && <label>ชื่อแม่แบบ<input data-dialog-initial-focus value={name} onChange={(event) => onName(event.target.value)} /></label>}<label>{versionOnly ? "เนื้อหาเวอร์ชันใหม่" : "เนื้อหาแม่แบบ"}<textarea data-dialog-initial-focus={versionOnly || undefined} value={body} onChange={(event) => onBody(event.target.value)} /></label><div className="settings-dialog-actions"><button type="button" onClick={onCancel}>ยกเลิก</button><button type="button" onClick={onSave}>{saveLabel}</button></div></AccessibleDialog>;
 }

@@ -3,18 +3,19 @@
 import { useMemo, useState } from "react";
 import type { ReferenceIdea } from "../../domain/types";
 import { useDashboardData } from "../../data/DashboardDataProvider";
+import { AccessibleDialog } from "../../shared/components/AccessibleDialog";
 import { addReference, deleteReference, updateReference } from "../reference-commands";
 
-type ReferenceForm = Pick<ReferenceIdea, "title" | "url" | "platform" | "tags" | "notes">;
+type ReferenceForm = Omit<Pick<ReferenceIdea, "title" | "url" | "platform" | "notes">, "tags"> & { tags: string };
 
-const emptyForm: ReferenceForm = { title: "", url: "", platform: "", tags: [], notes: "" };
+const emptyForm: ReferenceForm = { title: "", url: "", platform: "", tags: "", notes: "" };
 
 function makeReferenceId() {
   return `reference-${Date.now()}`;
 }
 
 function formFor(reference: ReferenceIdea): ReferenceForm {
-  return { title: reference.title, url: reference.url, platform: reference.platform, tags: reference.tags, notes: reference.notes };
+  return { title: reference.title, url: reference.url, platform: reference.platform, tags: reference.tags.join(", "), notes: reference.notes };
 }
 
 export function ReferencesWorkspace() {
@@ -41,15 +42,15 @@ export function ReferencesWorkspace() {
   }
 
   function changeForm(field: keyof ReferenceForm, value: string) {
-    setForm((current) => ({ ...current, [field]: field === "tags" ? value.split(",").map((tag) => tag.trim()).filter(Boolean) : value }));
+    setForm((current) => ({ ...current, [field]: value }));
   }
 
   async function saveReference() {
     const now = new Date().toISOString();
     try {
       await dashboard.mutate((state) => editingId
-        ? updateReference(state, editingId, form, now)
-        : addReference(state, { id: makeReferenceId(), ...form, now }));
+        ? updateReference(state, editingId, { ...form, tags: form.tags.split(",") }, now)
+        : addReference(state, { id: makeReferenceId(), ...form, tags: form.tags.split(","), now }));
       setError(null);
       closeForm();
     } catch (caught) {
@@ -100,10 +101,10 @@ export function ReferencesWorkspace() {
       })}
     </div>
     {activeReferences.length === 0 ? <p className="overview-state">ยังไม่มี Reference</p> : references.length === 0 ? <p className="overview-state">ไม่พบ Reference ที่ตรงกับการค้นหา</p> : null}
-    {deleting && <div className="settings-dialog-backdrop"><section className="settings-dialog" role="dialog" aria-modal="true" aria-labelledby="delete-reference-heading"><h2 id="delete-reference-heading">ยืนยันการลบ Reference</h2>{attachmentCount > 0 ? <p>Reference นี้ถูกแนบกับคอนเทนต์ {attachmentCount} ชิ้น</p> : <p>Reference นี้จะย้ายไปอยู่ในถังขยะและกู้คืนได้</p>}<div className="settings-dialog-actions"><button type="button" onClick={() => setDeleting(null)}>ยกเลิก</button><button type="button" onClick={() => void confirmDelete()}>ยืนยันการลบ</button></div></section></div>}
+    {deleting && <AccessibleDialog labelledBy="delete-reference-heading" onClose={() => setDeleting(null)}><h2 id="delete-reference-heading">ยืนยันการลบ Reference</h2>{attachmentCount > 0 ? <p>Reference นี้ถูกแนบกับคอนเทนต์ {attachmentCount} ชิ้น</p> : <p>Reference นี้จะย้ายไปอยู่ในถังขยะและกู้คืนได้</p>}<div className="settings-dialog-actions"><button type="button" data-dialog-initial-focus onClick={() => setDeleting(null)}>ยกเลิก</button><button type="button" onClick={() => void confirmDelete()}>ยืนยันการลบ</button></div></AccessibleDialog>}
   </section>;
 }
 
 function ReferenceDialog({ form, editing, onChange, onCancel, onSave }: { form: ReferenceForm; editing: boolean; onChange: (field: keyof ReferenceForm, value: string) => void; onCancel: () => void; onSave: () => void }) {
-  return <div className="settings-dialog-backdrop"><section className="settings-dialog" role="dialog" aria-modal="true" aria-labelledby="reference-dialog-heading"><h2 id="reference-dialog-heading">{editing ? "แก้ไข Reference" : "เพิ่ม Reference"}</h2><label>ชื่อไอเดีย<input value={form.title} onChange={(event) => onChange("title", event.target.value)} /></label><label>ลิงก์ HTTPS<input type="url" value={form.url} onChange={(event) => onChange("url", event.target.value)} /></label><label>แพลตฟอร์ม<input value={form.platform} onChange={(event) => onChange("platform", event.target.value)} /></label><label>แท็ก (คั่นด้วยจุลภาค)<input value={form.tags.join(", ")} onChange={(event) => onChange("tags", event.target.value)} /></label><label>โน้ต<textarea value={form.notes} onChange={(event) => onChange("notes", event.target.value)} /></label><div className="settings-dialog-actions"><button type="button" onClick={onCancel}>ยกเลิก</button><button type="button" onClick={onSave}>{editing ? "บันทึกการแก้ไข" : "บันทึก Reference"}</button></div></section></div>;
+  return <AccessibleDialog labelledBy="reference-dialog-heading" onClose={onCancel}><h2 id="reference-dialog-heading">{editing ? "แก้ไข Reference" : "เพิ่ม Reference"}</h2><label>ชื่อไอเดีย<input data-dialog-initial-focus value={form.title} onChange={(event) => onChange("title", event.target.value)} /></label><label>ลิงก์ HTTPS<input type="url" value={form.url} onChange={(event) => onChange("url", event.target.value)} /></label><label>แพลตฟอร์ม<input value={form.platform} onChange={(event) => onChange("platform", event.target.value)} /></label><label>แท็ก (คั่นด้วยจุลภาค)<input value={form.tags} onChange={(event) => onChange("tags", event.target.value)} /></label><label>โน้ต<textarea value={form.notes} onChange={(event) => onChange("notes", event.target.value)} /></label><div className="settings-dialog-actions"><button type="button" onClick={onCancel}>ยกเลิก</button><button type="button" onClick={onSave}>{editing ? "บันทึกการแก้ไข" : "บันทึก Reference"}</button></div></AccessibleDialog>;
 }

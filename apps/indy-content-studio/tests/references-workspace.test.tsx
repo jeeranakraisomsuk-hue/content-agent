@@ -64,4 +64,32 @@ describe("ReferencesWorkspace", () => {
     expect(persisted.references[0].deletedAt).not.toBeNull();
     expect(persisted.references[0].url).toBe("https://example.com");
   });
+
+  it("keeps in-progress comma-separated tags intact and gives dialogs keyboard focus control", async () => {
+    const state = createEmptyDashboardState();
+    state.references.push({ id: "ref-focus", title: "ลบด้วยคีย์บอร์ด", url: "https://example.com/focus", platform: "YouTube", tags: [], notes: "", createdAt: "now", updatedAt: "now", deletedAt: null });
+    const repository = new MemoryDashboardRepository(state);
+    render(<DashboardDataProvider repository={repository}><ReferencesWorkspace /></DashboardDataProvider>);
+
+    const addTrigger = await screen.findByRole("button", { name: "เพิ่ม Reference" });
+    addTrigger.focus();
+    fireEvent.click(addTrigger);
+    const title = screen.getByLabelText("ชื่อไอเดีย");
+    expect(title).toHaveFocus();
+    const tags = screen.getByLabelText("แท็ก (คั่นด้วยจุลภาค)");
+    fireEvent.change(tags, { target: { value: "hair," } });
+    expect(tags).toHaveValue("hair,");
+    fireEvent.keyDown(screen.getByRole("dialog", { name: "เพิ่ม Reference" }), { key: "Escape" });
+    expect(screen.queryByRole("dialog", { name: "เพิ่ม Reference" })).not.toBeInTheDocument();
+    expect(addTrigger).toHaveFocus();
+
+    const deleteTrigger = screen.getByRole("button", { name: "ลบ ลบด้วยคีย์บอร์ด" });
+    deleteTrigger.focus();
+    fireEvent.click(deleteTrigger);
+    const cancel = screen.getByRole("button", { name: "ยกเลิก" });
+    expect(cancel).toHaveFocus();
+    fireEvent.keyDown(screen.getByRole("dialog", { name: "ยืนยันการลบ Reference" }), { key: "Escape" });
+    expect(screen.queryByRole("dialog", { name: "ยืนยันการลบ Reference" })).not.toBeInTheDocument();
+    expect(deleteTrigger).toHaveFocus();
+  });
 });
