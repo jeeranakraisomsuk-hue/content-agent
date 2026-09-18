@@ -41,6 +41,30 @@ describe("reference commands", () => {
     expect(restoredUrl.references[0].deletedAt).toBe("deleted");
   });
 
+  it("allows a deleted reference to use the URL of an active reference without restoring it", () => {
+    const first = addReference(createEmptyDashboardState(), {
+      id: "ref-deleted",
+      title: "ลบแล้ว",
+      url: "https://example.com/a",
+      now: "created",
+    });
+    const deleted = deleteReference(first, "ref-deleted", "deleted");
+    const state = addReference(deleted, {
+      id: "ref-active",
+      title: "ใช้งานอยู่",
+      url: "https://example.com/b",
+      now: "active",
+    });
+
+    const updated = updateReference(state, "ref-deleted", { url: "https://example.com/b" }, "updated");
+
+    expect(updated.references[0]).toMatchObject({
+      url: "https://example.com/b",
+      deletedAt: "deleted",
+      updatedAt: "updated",
+    });
+  });
+
   it("validates and normalizes changed fields without replacing unchanged fields", () => {
     const state = addReference(createEmptyDashboardState(), {
       id: "ref-1",

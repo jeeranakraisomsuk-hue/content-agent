@@ -65,7 +65,7 @@ export function updateReference(state: DashboardState, id: string, patch: Refere
 
   const title = patch.title === undefined ? reference.title : requiredTitle(patch.title);
   const url = patch.url === undefined ? reference.url : toHttpsUrl(patch.url);
-  if (hasActiveDuplicateUrl(state.references, url, id)) throw new Error("มีลิงก์นี้อยู่แล้ว");
+  if (!reference.deletedAt && hasActiveDuplicateUrl(state.references, url, id)) throw new Error("มีลิงก์นี้อยู่แล้ว");
 
   const updated: ReferenceIdea = {
     ...reference,
