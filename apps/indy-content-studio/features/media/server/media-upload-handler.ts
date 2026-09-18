@@ -1,4 +1,5 @@
 import type { GoogleDriveMediaClient } from "./google-drive-media-client";
+import type { AuthorizeMediaUpload } from "./media-upload-authorization";
 
 const MAX_MEDIA_BYTES = 52_428_800;
 const VIDEO_FILE_EXTENSIONS = new Set([
@@ -16,6 +17,7 @@ const VIDEO_FILE_EXTENSIONS = new Set([
 
 type MediaUploadDependencies = {
   getClient: () => GoogleDriveMediaClient | null | Promise<GoogleDriveMediaClient | null>;
+  authorizeUpload: AuthorizeMediaUpload;
   allowedOrigin?: string | null;
 };
 
@@ -38,8 +40,18 @@ function hasAllowedOrigin(request: Request, allowedOrigin: string | null | undef
   }
 }
 
-export function createMediaUploadHandler({ getClient, allowedOrigin }: MediaUploadDependencies) {
+export function createMediaUploadHandler({ getClient, authorizeUpload, allowedOrigin }: MediaUploadDependencies) {
   return async function handleMediaUpload(request: Request): Promise<Response> {
+    let authorization;
+    try {
+      authorization = await authorizeUpload(request);
+    } catch {
+      return Response.json({ error: "ไม่สามารถตรวจสอบสิทธิ์อัปโหลดสื่อ" }, { status: 503 });
+    }
+    if (!authorization.authorized) {
+      return Response.json({ error: authorization.error }, { status: authorization.status });
+    }
+
     if (!hasAllowedOrigin(request, allowedOrigin)) {
       return Response.json({ error: "ไม่อนุญาตให้อัปโหลดจากต้นทางนี้" }, { status: 403 });
     }

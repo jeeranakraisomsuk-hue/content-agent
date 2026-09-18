@@ -2,6 +2,7 @@
 
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { createMediaUploadHandler } from "../features/media/server/media-upload-handler";
+import { createMediaUploadAuthorizer } from "../features/media/server/media-upload-authorization";
 import { createMediaProviderHandler } from "../features/media/server/media-provider-handler";
 import {
   createGoogleDriveMediaClient,
@@ -43,6 +44,20 @@ function fakeClient(overrides: Partial<GoogleDriveMediaClient> = {}): GoogleDriv
   };
 }
 
+function testUploadHandler({
+  getClient,
+  allowedOrigin,
+}: {
+  getClient: () => GoogleDriveMediaClient | null | Promise<GoogleDriveMediaClient | null>;
+  allowedOrigin?: string | null;
+}) {
+  return createMediaUploadHandler({
+    getClient,
+    allowedOrigin,
+    authorizeUpload: async () => ({ authorized: true }),
+  });
+}
+
 function signedRequest(fileId: string, expiresAt = nowSeconds + 60): Request {
   const url = createMediaDeliveryUrl({
     baseUrl: "https://studio.example",
@@ -59,12 +74,68 @@ afterEach(() => {
 });
 
 describe("POST /api/media/upload", () => {
+  it("returns 503 without an upload authorization token", async () => {
+    const client = fakeClient();
+    const handler = createMediaUploadHandler({
+      getClient: () => client,
+      authorizeUpload: createMediaUploadAuthorizer({}),
+    });
+
+    const response = await handler(formRequest({
+      assetId: "asset-unconfigured-auth",
+      file: new File(["image"], "photo.jpg", { type: "image/jpeg" }),
+    }));
+
+    expect(response.status).toBe(503);
+    expect(await response.json()).toEqual({ error: "ยังไม่ได้ตั้งค่าการอนุญาตอัปโหลดสื่อ" });
+    expect(client.uploadFile).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    ["missing credentials", {}],
+    ["mismatched bearer token", { Authorization: "Bearer wrong-token" }],
+    ["mismatched cookie token", { Cookie: "indy_media_upload_token=wrong-token" }],
+  ])("returns 403 for %s", async (_label, headers) => {
+    const client = fakeClient();
+    const handler = createMediaUploadHandler({
+      getClient: () => client,
+      authorizeUpload: createMediaUploadAuthorizer({ INDY_MEDIA_UPLOAD_TOKEN: "upload-secret" }),
+    });
+    const request = formRequest({
+      assetId: "asset-unauthorized",
+      file: new File(["image"], "photo.jpg", { type: "image/jpeg" }),
+    });
+    for (const [name, value] of Object.entries(headers)) request.headers.set(name, value);
+
+    const response = await handler(request);
+
+    expect(response.status).toBe(403);
+    expect(client.uploadFile).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    ["bearer token", { Authorization: "Bearer upload-secret" }],
+    ["HttpOnly deployment cookie", { Cookie: "indy_media_upload_token=upload-secret" }],
+  ])("accepts a matching %s", async (_label, headers) => {
+    const handler = createMediaUploadHandler({
+      getClient: () => fakeClient(),
+      authorizeUpload: createMediaUploadAuthorizer({ INDY_MEDIA_UPLOAD_TOKEN: "upload-secret" }),
+    });
+    const request = formRequest({
+      assetId: "asset-authorized",
+      file: new File(["image"], "photo.jpg", { type: "image/jpeg" }),
+    });
+    for (const [name, value] of Object.entries(headers)) request.headers.set(name, value);
+
+    expect((await handler(request)).status).toBe(200);
+  });
+
   it.each([
     ["mismatched", "https://attacker.example"],
     ["missing", null],
   ])("rejects a %s request origin before contacting Drive", async (_label, origin) => {
     const client = fakeClient();
-    const handler = createMediaUploadHandler({
+    const handler = testUploadHandler({
       getClient: () => client,
       allowedOrigin: "https://studio.example",
     });
@@ -81,7 +152,7 @@ describe("POST /api/media/upload", () => {
   });
 
   it("returns 503 when Google Drive is disconnected", async () => {
-    const handler = createMediaUploadHandler({ getClient: () => null });
+    const handler = testUploadHandler({ getClient: () => null });
 
     const response = await handler(formRequest({
       assetId: "asset-1",
@@ -93,7 +164,7 @@ describe("POST /api/media/upload", () => {
   });
 
   it("returns 400 when the request has no file", async () => {
-    const handler = createMediaUploadHandler({ getClient: () => fakeClient() });
+    const handler = testUploadHandler({ getClient: () => fakeClient() });
 
     const response = await handler(formRequest({ assetId: "asset-1" }));
 
@@ -101,7 +172,7 @@ describe("POST /api/media/upload", () => {
   });
 
   it("returns 413 for a file over 50 MB", async () => {
-    const handler = createMediaUploadHandler({ getClient: () => fakeClient() });
+    const handler = testUploadHandler({ getClient: () => fakeClient() });
     const file = new File([new Uint8Array(MAX_MEDIA_BYTES + 1)], "large.mp4", { type: "video/mp4" });
 
     const response = await handler(formRequest({ assetId: "asset-1", file }));
@@ -110,7 +181,7 @@ describe("POST /api/media/upload", () => {
   });
 
   it("returns 400 when a video has no JPEG preview", async () => {
-    const handler = createMediaUploadHandler({ getClient: () => fakeClient() });
+    const handler = testUploadHandler({ getClient: () => fakeClient() });
 
     const response = await handler(formRequest({
       assetId: "asset-video",
@@ -125,7 +196,7 @@ describe("POST /api/media/upload", () => {
     ["blank MIME", ""],
     ["spoofed image MIME", "image/jpeg"],
   ])("requires a JPEG preview for a video filename with %s", async (_label, mimeType) => {
-    const handler = createMediaUploadHandler({ getClient: () => fakeClient() });
+    const handler = testUploadHandler({ getClient: () => fakeClient() });
 
     const response = await handler(formRequest({
       assetId: "asset-spoofed-video",
@@ -137,7 +208,7 @@ describe("POST /api/media/upload", () => {
   });
 
   it("returns 413 when a video preview is over 50 MB", async () => {
-    const handler = createMediaUploadHandler({ getClient: () => fakeClient() });
+    const handler = testUploadHandler({ getClient: () => fakeClient() });
 
     const response = await handler(formRequest({
       assetId: "asset-large-preview",
@@ -152,7 +223,7 @@ describe("POST /api/media/upload", () => {
     const client = fakeClient({
       uploadFile: vi.fn(async () => { throw new Error("provider secret-token rejected"); }),
     });
-    const handler = createMediaUploadHandler({ getClient: () => client });
+    const handler = testUploadHandler({ getClient: () => client });
 
     const response = await handler(formRequest({
       assetId: "asset-1",
@@ -167,7 +238,7 @@ describe("POST /api/media/upload", () => {
 
   it("uploads an image privately and reuses it as its preview", async () => {
     const client = fakeClient();
-    const handler = createMediaUploadHandler({ getClient: () => client });
+    const handler = testUploadHandler({ getClient: () => client });
 
     const response = await handler(formRequest({
       assetId: "asset-image",
@@ -186,7 +257,7 @@ describe("POST /api/media/upload", () => {
 
   it("uploads a video and its JPEG preview as separate private files", async () => {
     const client = fakeClient();
-    const handler = createMediaUploadHandler({ getClient: () => client });
+    const handler = testUploadHandler({ getClient: () => client });
 
     const response = await handler(formRequest({
       assetId: "asset-video",
@@ -210,7 +281,7 @@ describe("POST /api/media/upload", () => {
         .mockResolvedValueOnce({ fileId: "drive-original" })
         .mockRejectedValueOnce(new Error("preview rejected")),
     });
-    const handler = createMediaUploadHandler({ getClient: () => client });
+    const handler = testUploadHandler({ getClient: () => client });
 
     const response = await handler(formRequest({
       assetId: "asset-video",

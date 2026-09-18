@@ -16,4 +16,7 @@
 - Final provider compatibility: Drive upload, stream, and cleanup requests include `supportsAllDrives=true` for shared-drive service-account storage.
 - Final upload boundary: when `APP_PUBLIC_BASE_URL` is configured, `POST /api/media/upload` rejects missing or mismatched `Origin` headers with `403` before contacting Drive. This is a same-origin browser guard, not a replacement for account authentication.
 - Final cross-job compatibility: delivery URLs retain a 300-second default TTL and accept explicit 1,800- and 3,600-second integration TTLs.
-- Final verification: `pnpm exec vitest run tests/media-upload-route.test.ts` — 25 tests passed; `pnpm typecheck` and `pnpm build` both passed.
+- Final verification: `pnpm exec vitest run tests/media-upload-route.test.ts` — 31 tests passed; `pnpm typecheck` and `pnpm build` both passed.
+- Provider-upload authorization: deployments must configure `INDY_MEDIA_UPLOAD_TOKEN`. The upload route accepts a matching `Authorization: Bearer <token>` header or `indy_media_upload_token` cookie; cookie provisioning must use `HttpOnly`, `Secure`, and `SameSite=Strict` because those response attributes are not visible on an incoming Cookie header.
+- The upload route fails closed with `503` when the token is not configured and `403` when credentials are missing or mismatched, before parsing multipart data or contacting Drive. Existing UI error handling retains the local blob for retry when provider upload returns either status.
+- Signed provider `GET` delivery remains independently authorized by its short-lived HMAC URL and does not require the upload token.
