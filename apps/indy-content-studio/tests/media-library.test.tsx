@@ -2,10 +2,17 @@ import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { DashboardDataProvider } from "../features/data/DashboardDataProvider";
 import { MemoryDashboardRepository } from "../features/data/memory-dashboard-repository";
+import type { DashboardRepository } from "../features/data/dashboard-repository";
 import { createEmptyDashboardState } from "../features/domain/create-empty-state";
 import type { DashboardState } from "../features/domain/types";
 import { MediaLibraryWorkspace } from "../features/media/components/MediaLibraryWorkspace";
+import { createUploadedMedia } from "../features/media/media-commands";
 import type { MediaBlobStore } from "../features/media/media-blob-store";
+import { createVideoPoster } from "../features/media/video-poster";
+
+vi.mock("../features/media/video-poster", () => ({
+  createVideoPoster: vi.fn(async () => new Blob(["poster"], { type: "image/jpeg" })),
+}));
 
 class TestBlobStore implements MediaBlobStore {
   private readonly blobs = new Map<string, Blob>();
@@ -14,9 +21,15 @@ class TestBlobStore implements MediaBlobStore {
   async remove(id: string) { this.blobs.delete(id); }
 }
 
-function renderLibrary(initialState: DashboardState = createEmptyDashboardState()) {
-  const repository = new MemoryDashboardRepository(initialState);
-  const blobStore = new TestBlobStore();
+function integrationHealth(status: "connected" | "disconnected" = "connected") {
+  return Response.json({ integrations: [{ provider: "google-drive", status, checkedAt: "2026-09-18T00:00:00.000Z", message: status === "connected" ? "เชื่อมต่อแล้ว" : "ยังไม่ได้เชื่อมต่อ" }] });
+}
+
+function renderLibrary(
+  initialState: DashboardState = createEmptyDashboardState(),
+  repository: DashboardRepository = new MemoryDashboardRepository(initialState),
+  blobStore = new TestBlobStore(),
+) {
   return {
     ...render(<DashboardDataProvider repository={repository}><MediaLibraryWorkspace blobStore={blobStore} /></DashboardDataProvider>),
     blobStore,
@@ -25,6 +38,7 @@ function renderLibrary(initialState: DashboardState = createEmptyDashboardState(
 }
 
 afterEach(() => {
+  vi.clearAllMocks();
   vi.unstubAllGlobals();
 });
 
@@ -57,14 +71,11 @@ describe("MediaLibraryWorkspace", () => {
     expect(await screen.findByRole("alert")).toHaveTextContent("ต้องเป็นลิงก์ https");
   });
 
-  it("asks the server for Drive availability and keeps a 503 upload local-only", async () => {
-    const fetcher = vi.fn().mockResolvedValue(Response.json(
-      { error: "ยังไม่ได้เชื่อมต่อ Google Drive" },
-      { status: 503 },
-    ));
+  it("keeps a video local-only without decoding it when the health preflight says Drive is disconnected", async () => {
+    const fetcher = vi.fn().mockResolvedValue(integrationHealth("disconnected"));
     vi.stubGlobal("fetch", fetcher);
     const { blobStore, repository } = renderLibrary();
-    const file = new File(["image"], "เก็บในเครื่อง.jpg", { type: "image/jpeg" });
+    const file = new File(["video"], "เก็บในเครื่อง.MP4", { type: "" });
 
     fireEvent.change(await screen.findByLabelText("เลือกไฟล์สื่อ"), { target: { files: [file] } });
 
@@ -72,14 +83,18 @@ describe("MediaLibraryWorkspace", () => {
     const [asset] = (await repository.read()).media;
     expect(asset.remoteStatus).toBe("local-only");
     expect(await blobStore.get(asset.id)).toBe(file);
-    expect(fetcher).toHaveBeenCalledWith("/api/media/upload", expect.objectContaining({ method: "POST" }));
+    expect(fetcher).toHaveBeenCalledOnce();
+    expect(fetcher).toHaveBeenCalledWith("/api/integrations/health");
+    expect(createVideoPoster).not.toHaveBeenCalled();
   });
 
   it("stores provider identifiers only after Drive confirms the upload", async () => {
     const state = createEmptyDashboardState();
     state.integrations.find(({ provider }) => provider === "google-drive")!.status = "connected";
     let resolveUpload!: (response: Response) => void;
-    const fetcher = vi.fn(() => new Promise<Response>((resolve) => { resolveUpload = resolve; }));
+    const fetcher = vi.fn()
+      .mockResolvedValueOnce(integrationHealth())
+      .mockImplementationOnce(() => new Promise<Response>((resolve) => { resolveUpload = resolve; }));
     vi.stubGlobal("fetch", fetcher);
     const { repository } = renderLibrary(state);
 
@@ -109,10 +124,12 @@ describe("MediaLibraryWorkspace", () => {
   it("returns to local-only when the server says Drive is disconnected", async () => {
     const state = createEmptyDashboardState();
     state.integrations.find(({ provider }) => provider === "google-drive")!.status = "connected";
-    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(Response.json(
-      { error: "ยังไม่ได้เชื่อมต่อ Google Drive" },
-      { status: 503 },
-    )));
+    vi.stubGlobal("fetch", vi.fn()
+      .mockResolvedValueOnce(integrationHealth())
+      .mockResolvedValueOnce(Response.json(
+        { error: "ยังไม่ได้เชื่อมต่อ Google Drive" },
+        { status: 503 },
+      )));
     const { blobStore, repository } = renderLibrary(state);
 
     fireEvent.change(await screen.findByLabelText("เลือกไฟล์สื่อ"), { target: { files: [new File(["image"], "ยังอยู่ในเครื่อง.jpg", { type: "image/jpeg" })] } });
@@ -128,6 +145,7 @@ describe("MediaLibraryWorkspace", () => {
     const state = createEmptyDashboardState();
     state.integrations.find(({ provider }) => provider === "google-drive")!.status = "connected";
     const fetcher = vi.fn()
+      .mockResolvedValueOnce(integrationHealth())
       .mockResolvedValueOnce(Response.json({ error: "อัปโหลดไป Google Drive ไม่สำเร็จ" }, { status: 502 }));
     vi.stubGlobal("fetch", fetcher);
     const { blobStore, repository } = renderLibrary(state);
@@ -140,6 +158,7 @@ describe("MediaLibraryWorkspace", () => {
     expect(await blobStore.get(failedAsset.id)).not.toBeNull();
     expect(screen.queryByText(/ส่งแล้ว|เผยแพร่แล้ว/)).not.toBeInTheDocument();
 
+    fetcher.mockResolvedValueOnce(integrationHealth());
     fetcher.mockResolvedValueOnce(Response.json({
       assetId: failedAsset.id,
       providerFileId: "drive-retry-original",
@@ -150,5 +169,64 @@ describe("MediaLibraryWorkspace", () => {
 
     expect(await screen.findByText("พร้อมใช้ผ่าน Google Drive")).toBeVisible();
     expect((await repository.read()).media[0]).toMatchObject({ remoteStatus: "ready", providerFileId: "drive-retry-original" });
+  });
+
+  it("retries an upload that was persisted as uploading", async () => {
+    const now = "2026-09-18T00:00:00.000Z";
+    const state = createUploadedMedia(createEmptyDashboardState(), { id: "asset-stuck", name: "ค้าง.jpg", mimeType: "image/jpeg", size: 5, now });
+    state.media[0].remoteStatus = "uploading";
+    const fetcher = vi.fn()
+      .mockResolvedValueOnce(integrationHealth())
+      .mockResolvedValueOnce(Response.json({ assetId: "asset-stuck", providerFileId: "drive-stuck", previewProviderFileId: "drive-stuck", remoteStatus: "ready" }));
+    vi.stubGlobal("fetch", fetcher);
+    const { blobStore, repository } = renderLibrary(state);
+    await blobStore.put("asset-stuck", new File(["image"], "ค้าง.jpg", { type: "image/jpeg" }));
+
+    fireEvent.click(await screen.findByRole("button", { name: "ลองอัปโหลด ค้าง.jpg อีกครั้ง" }));
+
+    expect(await screen.findByText("พร้อมใช้ผ่าน Google Drive")).toBeVisible();
+    expect((await repository.read()).media[0]).toMatchObject({ remoteStatus: "ready", providerFileId: "drive-stuck" });
+  });
+
+  it("keeps the local blob when a provider-state write fails after metadata was committed", async () => {
+    class FailingProviderStateRepository extends MemoryDashboardRepository {
+      private writes = 0;
+      override async write(next: DashboardState) {
+        this.writes += 1;
+        if (this.writes === 2) throw new Error("provider state write failed");
+        await super.write(next);
+      }
+    }
+    const initialState = createEmptyDashboardState();
+    const repository = new FailingProviderStateRepository(initialState);
+    const { blobStore } = renderLibrary(initialState, repository);
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(integrationHealth()));
+
+    fireEvent.change(await screen.findByLabelText("เลือกไฟล์สื่อ"), { target: { files: [new File(["image"], "ยังต้องอยู่.jpg", { type: "image/jpeg" })] } });
+
+    expect(await screen.findByRole("alert")).toHaveTextContent("อัปโหลดไป Google Drive ไม่สำเร็จ");
+    const [asset] = (await repository.read()).media;
+    expect(asset.name).toBe("ยังต้องอยู่.jpg");
+    expect(await blobStore.get(asset.id)).not.toBeNull();
+  });
+
+  it("creates a JPEG preview for a video extension even when MIME is blank", async () => {
+    const fetcher = vi.fn()
+      .mockResolvedValueOnce(integrationHealth())
+      .mockImplementationOnce(async (_url: string, init?: RequestInit) => {
+        const form = init?.body as FormData;
+        const assetId = String(form.get("assetId"));
+        const preview = form.get("preview") as File;
+        expect(preview.name).toBe("ตัวอย่าง-poster.jpg");
+        expect(preview.type).toBe("image/jpeg");
+        return Response.json({ assetId, providerFileId: "drive-video", previewProviderFileId: "drive-poster", remoteStatus: "ready" });
+      });
+    vi.stubGlobal("fetch", fetcher);
+    renderLibrary();
+
+    fireEvent.change(await screen.findByLabelText("เลือกไฟล์สื่อ"), { target: { files: [new File(["video"], "ตัวอย่าง.MP4", { type: "" })] } });
+
+    expect(await screen.findByText("พร้อมใช้ผ่าน Google Drive")).toBeVisible();
+    expect(createVideoPoster).toHaveBeenCalledOnce();
   });
 });

@@ -16,6 +16,8 @@ type ProviderUploadResult = {
   remoteStatus: "ready";
 };
 
+const videoFileExtensions = new Set(["3gp", "avi", "m4v", "mkv", "mov", "mp4", "mpeg", "mpg", "ogv", "webm"]);
+
 const remoteStatusLabels: Record<MediaAsset["remoteStatus"], string> = {
   "local-only": "เก็บไว้ในเครื่องนี้เท่านั้น",
   uploading: "กำลังอัปโหลดไป Google Drive…",
@@ -41,6 +43,30 @@ function isProviderUploadResult(value: unknown, assetId: string): value is Provi
 function fileFromBlob(blob: Blob, asset: MediaAsset): File {
   if (blob instanceof File && blob.name === asset.name) return blob;
   return new File([blob], asset.name, { type: asset.mimeType });
+}
+
+function isVideoFile(file: File): boolean {
+  if (file.type.trim().toLocaleLowerCase().startsWith("video/")) return true;
+  const extension = file.name.trim().toLocaleLowerCase().match(/\.([a-z0-9]+)$/)?.[1];
+  return extension ? videoFileExtensions.has(extension) : false;
+}
+
+async function isDriveAvailable(): Promise<boolean> {
+  try {
+    const response = await fetch("/api/integrations/health");
+    if (!response.ok) return false;
+    const payload: unknown = await response.json();
+    if (!payload || typeof payload !== "object") return false;
+    const integrations = (payload as { integrations?: unknown }).integrations;
+    return Array.isArray(integrations) && integrations.some((integration) => (
+      integration
+      && typeof integration === "object"
+      && (integration as { provider?: unknown }).provider === "google-drive"
+      && (integration as { status?: unknown }).status === "connected"
+    ));
+  } catch {
+    return false;
+  }
 }
 
 export function MediaLibraryWorkspace({ blobStore }: { blobStore?: MediaBlobStore } = {}) {
@@ -73,12 +99,17 @@ export function MediaLibraryWorkspace({ blobStore }: { blobStore?: MediaBlobStor
 
   async function uploadToProvider(asset: MediaAsset, source: Blob) {
     await setRemoteState(asset.id, { remoteStatus: "uploading", providerFileId: null, previewProviderFileId: null });
+    if (!await isDriveAvailable()) {
+      await setRemoteState(asset.id, { remoteStatus: "local-only", providerFileId: null, previewProviderFileId: null });
+      return;
+    }
+
     try {
       const file = fileFromBlob(source, asset);
       const form = new FormData();
       form.set("assetId", asset.id);
       form.set("file", file);
-      if (asset.mimeType.startsWith("video/")) {
+      if (isVideoFile(file)) {
         try {
           const poster = await createVideoPoster(file);
           const baseName = file.name.replace(/\.[^.]+$/, "") || "video";
@@ -113,7 +144,14 @@ export function MediaLibraryWorkspace({ blobStore }: { blobStore?: MediaBlobStor
     try {
       await activeBlobStore.put(id, file);
       await dashboard.mutate((state) => createUploadedMedia(state, { id, name: file.name, mimeType: file.type, size: file.size, now }));
-      setError(null);
+    } catch (caught) {
+      await activeBlobStore.remove(id).catch(() => undefined);
+      setError(caught instanceof Error ? caught.message : "อัปโหลดไม่สำเร็จ");
+      return;
+    }
+
+    setError(null);
+    try {
       await uploadToProvider({
         id,
         name: file.name,
@@ -131,9 +169,8 @@ export function MediaLibraryWorkspace({ blobStore }: { blobStore?: MediaBlobStor
         updatedAt: now,
         deletedAt: null,
       }, file);
-    } catch (caught) {
-      await activeBlobStore.remove(id).catch(() => undefined);
-      setError(caught instanceof Error ? caught.message : "อัปโหลดไม่สำเร็จ");
+    } catch {
+      setError("อัปโหลดไป Google Drive ไม่สำเร็จ");
     }
   }
 
@@ -205,7 +242,7 @@ export function MediaLibraryWorkspace({ blobStore }: { blobStore?: MediaBlobStor
           {tab === "all" && <>
             <button type="button" onClick={() => setPreview(asset)}>ดูตัวอย่าง</button>
             <button type="button" onClick={() => void editTags(asset)}>แก้แท็ก</button>
-            {asset.remoteStatus === "failed" && <button type="button" onClick={() => void retryProviderUpload(asset)} aria-label={`ลองอัปโหลด ${asset.name} อีกครั้ง`}>ลองอีกครั้ง</button>}
+            {(asset.remoteStatus === "failed" || asset.remoteStatus === "uploading") && <button type="button" onClick={() => void retryProviderUpload(asset)} aria-label={`ลองอัปโหลด ${asset.name} อีกครั้ง`}>ลองอีกครั้ง</button>}
             <button type="button" onClick={() => void trash(asset)} aria-label={`ย้าย ${asset.name} ไปถังขยะ`}>ถังขยะ</button>
           </>}
           {tab === "trash" && <button type="button" onClick={() => void restore(asset)} aria-label={`กู้คืน ${asset.name}`}>กู้คืน</button>}
