@@ -61,7 +61,7 @@ export function CreateContentModal({ open, onClose, onCreate }: CreateContentMod
 
   return (
     <div className="create-modal-backdrop">
-      <section className="create-content-modal" role="dialog" aria-modal="true" aria-labelledby="create-content-heading">
+      <section className="create-content-modal motion-material-surface motion-modal" role="dialog" aria-modal="true" aria-labelledby="create-content-heading">
         <div className="create-modal-heading">
           <div>
             <p className="eyebrow">เริ่มชิ้นงานใหม่</p>

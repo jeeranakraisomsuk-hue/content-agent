@@ -15,7 +15,7 @@ export function TaskDetailDrawer({ task, onClose, onRequestSend }: TaskDetailDra
   });
 
   return (
-    <aside className="task-drawer" role="dialog" aria-modal="false" aria-label={`รายละเอียด ${task.title}`}>
+    <aside className="task-drawer motion-material-surface motion-drawer" role="dialog" aria-modal="false" aria-label={`รายละเอียด ${task.title}`}>
       <div className="task-drawer-heading">
         <div>
           <p className="eyebrow">รายละเอียดงาน</p>

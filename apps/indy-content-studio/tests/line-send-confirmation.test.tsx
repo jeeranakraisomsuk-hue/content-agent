@@ -18,7 +18,9 @@ describe("LineSendConfirmation", () => {
 
     render(<LineSendConfirmation task={readyTask} open onCancel={vi.fn()} onConfirm={confirm} />);
 
-    expect(screen.getByRole("dialog", { name: "ยืนยันการส่งเข้า LINE OA" })).toBeVisible();
+    const dialog = screen.getByRole("dialog", { name: "ยืนยันการส่งเข้า LINE OA" });
+    expect(dialog).toBeVisible();
+    expect(dialog).toHaveClass("motion-material-surface", "motion-modal");
     expect(screen.getByText("review-reels.mp4")).toBeVisible();
     expect(screen.getByText("แคปชันตัวอย่าง")).toBeVisible();
     expect(screen.getByText("PRIK GN")).toBeVisible();

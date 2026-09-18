@@ -7,6 +7,7 @@ describe("CreateContentModal", () => {
     const create = vi.fn();
 
     render(<CreateContentModal open onClose={vi.fn()} onCreate={create} />);
+    expect(screen.getByRole("dialog", { name: "สร้างคอนเทนต์" })).toHaveClass("motion-material-surface", "motion-modal");
     fireEvent.click(screen.getByRole("button", { name: "สร้างงาน" }));
 
     expect(screen.getByText("กรุณาระบุชื่อชิ้นงาน")).toBeVisible();

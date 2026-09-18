@@ -25,7 +25,9 @@ describe("TaskDetailDrawer", () => {
 
     render(<TaskDetailDrawer task={task} onClose={close} onRequestSend={requestSend} />);
 
-    expect(screen.getByRole("dialog", { name: "รายละเอียด ตัดต่อคลิป Reels" })).toBeVisible();
+    const drawer = screen.getByRole("dialog", { name: "รายละเอียด ตัดต่อคลิป Reels" });
+    expect(drawer).toBeVisible();
+    expect(drawer).toHaveClass("motion-material-surface", "motion-drawer");
     expect(screen.getByText("ตัดต่อ")).toBeVisible();
     expect(screen.getByText("10:30")).toBeVisible();
     expect(screen.getByText("review-reels.mp4")).toBeVisible();
