@@ -7,7 +7,6 @@ import { TodayOverview, type TodayOverviewState } from "../features/dashboard/co
 import { CreateContentModal, type CreateContentInput } from "../features/dashboard/components/CreateContentModal";
 import { TaskDetailDrawer } from "../features/dashboard/components/TaskDetailDrawer";
 import { LineSendConfirmation } from "../features/dashboard/components/LineSendConfirmation";
-import { ProductionBoard } from "../features/content/components/ProductionBoard";
 import { dashboardTaskFromContent, dashboardTaskToContent, dashboardTaskToMedia, type DashboardTask } from "../features/dashboard/dashboard-model";
 import { useDashboardWorkspace } from "../features/dashboard/useDashboardWorkspace";
 import { DashboardDataProvider, useDashboardData } from "../features/data/DashboardDataProvider";
@@ -21,6 +20,7 @@ import { ContentEditorDialog } from "../features/content/components/ContentEdito
 import { OverviewWorkspace } from "../features/overview/components/OverviewWorkspace";
 import { ContentCalendarWorkspace } from "../features/calendar/components/ContentCalendarWorkspace";
 import { ActionPlanWorkspace } from "../features/action-plan/components/ActionPlanWorkspace";
+import { ProductionBoardWorkspace } from "../features/production/components/ProductionBoardWorkspace";
 
 const initialTasks: DashboardTask[] = [
   { id: "reels", title: "ตัดต่อคลิป Reels เทคนิคทรงผม", priority: "urgent", scheduledTime: "10:30", workflowStage: "ตัดต่อ", lastWorkedAt: "2026-09-18T10:18:00.000Z" },
@@ -98,7 +98,7 @@ function HomePageContent() {
         }} />
         <CreateContentModal open={workspace.isCreateOpen} onClose={() => workspace.setCreateOpen(false)} onCreate={createTask} />
       </>}
-      {activeWorkspace === "production-board" && <ProductionBoard items={todayTasks.map((task) => ({ id: task.id, title: task.title, status: task.workflowStage ?? "วางแผน" }))} />}
+      {activeWorkspace === "production-board" && <ProductionBoardWorkspace />}
       {activeWorkspace === "settings" && <SettingsWorkspace />}
       {activeWorkspace === "media-library" && <MediaLibraryWorkspace />}
       {activeWorkspace === "references" && <ReferencesWorkspace />}
