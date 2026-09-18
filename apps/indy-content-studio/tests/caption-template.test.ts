@@ -1,0 +1,5 @@
+import { describe, expect, it } from "vitest";
+import { createEmptyDashboardState } from "../features/domain/create-empty-state";
+import { addCaptionTemplate, addCaptionTemplateVersion } from "../features/captions/template-commands";
+import { renderCaptionTemplate } from "../features/captions/render-template";
+describe("caption templates", () => { it("renders variables and keeps immutable versions", () => { expect(renderCaptionTemplate("เรียน {course} วันที่ {date}", { course: "ตัดผม", date: "20 ก.ย." })).toEqual({ text: "เรียน ตัดผม วันที่ 20 ก.ย.", missing: [] }); expect(renderCaptionTemplate("เรียน {course}", {})).toEqual({ text: "เรียน {course}", missing: ["course"] }); const state = createEmptyDashboardState(); const next = addCaptionTemplate(state, { id: "tpl-1", name: "เปิดคอร์ส", body: "สมัคร {course}", now: "now" }); const updated = addCaptionTemplateVersion(next.captionTemplates[0], { id: "tpl-1-v2", body: "สมัคร {course} วันที่ {date}", now: "later" }); expect(updated.versions).toHaveLength(2); expect(updated.versions[0].body).toBe("สมัคร {course}"); }); });

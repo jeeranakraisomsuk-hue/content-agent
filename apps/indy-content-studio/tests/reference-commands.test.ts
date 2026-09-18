@@ -1,0 +1,4 @@
+import { describe, expect, it } from "vitest";
+import { createEmptyDashboardState } from "../features/domain/create-empty-state";
+import { addReference, deleteReference, updateReference } from "../features/references/reference-commands";
+describe("reference commands", () => { it("validates and soft deletes references", () => { const state = createEmptyDashboardState(); const next = addReference(state, { id: "ref-1", title: " ไอเดีย ", url: "https://example.com/a", tags: ["รีวิว"], now: "2026-09-18" }); expect(next.references[0].title).toBe("ไอเดีย"); expect(updateReference(next, "ref-1", { title: "ใหม่" }).references[0].title).toBe("ใหม่"); expect(deleteReference(next, "ref-1", "now").references[0].deletedAt).toBe("now"); expect(() => addReference(state, { id: "x", title: "x", url: "http://bad", now: "now" })).toThrow("https"); }); });
