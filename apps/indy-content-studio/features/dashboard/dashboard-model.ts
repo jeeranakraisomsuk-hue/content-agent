@@ -8,8 +8,8 @@ export interface DashboardTask {
 }
 
 const priorityOrder: Record<TaskPriority, number> = {
-  high: 0,
-  urgent: 1,
+  urgent: 0,
+  high: 1,
   normal: 2,
   low: 3,
 };

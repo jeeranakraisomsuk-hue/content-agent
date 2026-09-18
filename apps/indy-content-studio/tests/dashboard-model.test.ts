@@ -7,13 +7,13 @@ describe("sortTasksForToday", () => {
       { id: "later", title: "Later urgent task", priority: "urgent", scheduledTime: "15:00" },
       { id: "early", title: "Early urgent task", priority: "urgent", scheduledTime: "09:00" },
       { id: "normal", title: "Normal task", priority: "normal", scheduledTime: "08:00" },
-      { id: "urgent", title: "High priority task", priority: "high", scheduledTime: "08:30" },
+      { id: "high", title: "High priority task", priority: "high", scheduledTime: "08:30" },
     ];
 
     expect(sortTasksForToday(tasks).map((task) => task.id)).toEqual([
-      "urgent",
       "early",
       "later",
+      "high",
       "normal",
     ]);
   });
