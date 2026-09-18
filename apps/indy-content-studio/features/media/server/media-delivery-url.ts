@@ -2,6 +2,10 @@ import { createHmac, timingSafeEqual } from "node:crypto";
 
 export type MediaDeliveryPurpose = "original" | "preview";
 
+const DEFAULT_DELIVERY_TTL_SECONDS = 300;
+const MAX_DELIVERY_TTL_SECONDS = 900;
+type Environment = Readonly<Record<string, string | undefined>>;
+
 type MediaDeliveryFields = {
   fileId: string;
   purpose: MediaDeliveryPurpose;
@@ -27,6 +31,81 @@ export function createMediaDeliveryUrl({
   url.searchParams.set("expiresAt", String(fields.expiresAt));
   url.searchParams.set("signature", signMediaDelivery(fields, secret));
   return url.toString();
+}
+
+export function createEnvironmentMediaDeliveryUrl({
+  fileId,
+  purpose,
+  environment = process.env,
+  now = () => Math.floor(Date.now() / 1_000),
+  ttlSeconds = DEFAULT_DELIVERY_TTL_SECONDS,
+}: {
+  fileId: string;
+  purpose: MediaDeliveryPurpose;
+  environment?: Environment;
+  now?: () => number;
+  ttlSeconds?: number;
+}): string {
+  const baseUrl = environment.APP_PUBLIC_BASE_URL;
+  const secret = environment.INDY_MEDIA_SIGNING_SECRET;
+  let parsedBase: URL;
+  try {
+    if (!baseUrl) throw new Error("missing base");
+    parsedBase = new URL(baseUrl);
+  } catch {
+    throw new Error("APP_PUBLIC_BASE_URL must be an absolute HTTPS URL");
+  }
+  if (parsedBase.protocol !== "https:" || parsedBase.username || parsedBase.password) {
+    throw new Error("APP_PUBLIC_BASE_URL must be an absolute HTTPS URL");
+  }
+  if (!secret) throw new Error("INDY_MEDIA_SIGNING_SECRET is required");
+  if (!Number.isSafeInteger(ttlSeconds) || ttlSeconds < 1 || ttlSeconds > MAX_DELIVERY_TTL_SECONDS) {
+    throw new Error("Media delivery TTL must be between 1 and 900 seconds");
+  }
+
+  return createMediaDeliveryUrl({
+    baseUrl: parsedBase.toString(),
+    fileId,
+    purpose,
+    expiresAt: now() + ttlSeconds,
+    secret,
+  });
+}
+
+/**
+ * Integration servers call this with persisted provider IDs immediately before
+ * delivery. The returned URLs are deliberately short-lived and must not be
+ * written back into DashboardState.
+ */
+export function createProviderMediaDeliveryUrls({
+  providerFileId,
+  previewProviderFileId,
+  environment = process.env,
+  now = () => Math.floor(Date.now() / 1_000),
+  ttlSeconds = DEFAULT_DELIVERY_TTL_SECONDS,
+}: {
+  providerFileId: string;
+  previewProviderFileId: string;
+  environment?: Environment;
+  now?: () => number;
+  ttlSeconds?: number;
+}): { originalContentUrl: string; previewImageUrl: string } {
+  return {
+    originalContentUrl: createEnvironmentMediaDeliveryUrl({
+      fileId: providerFileId,
+      purpose: "original",
+      environment,
+      now,
+      ttlSeconds,
+    }),
+    previewImageUrl: createEnvironmentMediaDeliveryUrl({
+      fileId: previewProviderFileId,
+      purpose: "preview",
+      environment,
+      now,
+      ttlSeconds,
+    }),
+  };
 }
 
 export function verifyMediaDeliveryUrl({

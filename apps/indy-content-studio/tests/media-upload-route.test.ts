@@ -1,14 +1,17 @@
 // @vitest-environment node
 
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { createMediaUploadHandler } from "../app/api/media/upload/route";
-import { createMediaProviderHandler } from "../app/api/media/provider/[fileId]/route";
+import { createMediaUploadHandler } from "../features/media/server/media-upload-handler";
+import { createMediaProviderHandler } from "../features/media/server/media-provider-handler";
 import {
   createGoogleDriveMediaClient,
+  createGoogleDriveMediaClientFromEnvironment,
   type GoogleDriveMediaClient,
 } from "../features/media/server/google-drive-media-client";
 import {
   createMediaDeliveryUrl,
+  createProviderMediaDeliveryUrls,
+  verifyMediaDeliveryUrl,
 } from "../features/media/server/media-delivery-url";
 import { createVideoPoster } from "../features/media/video-poster";
 
@@ -31,6 +34,7 @@ function formRequest(fields: {
 function fakeClient(overrides: Partial<GoogleDriveMediaClient> = {}): GoogleDriveMediaClient {
   return {
     uploadFile: vi.fn(async ({ name }) => ({ fileId: `drive-${name}` })),
+    deleteFile: vi.fn(async () => undefined),
     streamFile: vi.fn(async () => new Response("provider-bytes", {
       status: 200,
       headers: { "Content-Type": "video/mp4", "Content-Length": "14", "Accept-Ranges": "bytes" },
@@ -96,6 +100,33 @@ describe("POST /api/media/upload", () => {
     expect(await response.json()).toEqual({ error: "วิดีโอต้องมีภาพตัวอย่าง JPEG" });
   });
 
+  it.each([
+    ["blank MIME", ""],
+    ["spoofed image MIME", "image/jpeg"],
+  ])("requires a JPEG preview for a video filename with %s", async (_label, mimeType) => {
+    const handler = createMediaUploadHandler({ getClient: () => fakeClient() });
+
+    const response = await handler(formRequest({
+      assetId: "asset-spoofed-video",
+      file: new File(["video"], "clip.MP4", { type: mimeType }),
+    }));
+
+    expect(response.status).toBe(400);
+    expect(await response.json()).toEqual({ error: "วิดีโอต้องมีภาพตัวอย่าง JPEG" });
+  });
+
+  it("returns 413 when a video preview is over 50 MB", async () => {
+    const handler = createMediaUploadHandler({ getClient: () => fakeClient() });
+
+    const response = await handler(formRequest({
+      assetId: "asset-large-preview",
+      file: new File(["video"], "clip.mp4", { type: "video/mp4" }),
+      preview: new File([new Uint8Array(MAX_MEDIA_BYTES + 1)], "clip-poster.jpg", { type: "image/jpeg" }),
+    }));
+
+    expect(response.status).toBe(413);
+  });
+
   it("returns a sanitized 502 when Drive rejects an upload", async () => {
     const client = fakeClient({
       uploadFile: vi.fn(async () => { throw new Error("provider secret-token rejected"); }),
@@ -151,6 +182,25 @@ describe("POST /api/media/upload", () => {
     });
     expect(client.uploadFile).toHaveBeenCalledTimes(2);
   });
+
+  it("deletes the original Drive file when the video preview upload fails", async () => {
+    const client = fakeClient({
+      uploadFile: vi.fn()
+        .mockResolvedValueOnce({ fileId: "drive-original" })
+        .mockRejectedValueOnce(new Error("preview rejected")),
+    });
+    const handler = createMediaUploadHandler({ getClient: () => client });
+
+    const response = await handler(formRequest({
+      assetId: "asset-video",
+      file: new File(["video"], "clip.mp4", { type: "video/mp4" }),
+      preview: new File(["jpeg"], "clip-poster.jpg", { type: "image/jpeg" }),
+    }));
+
+    expect(response.status).toBe(502);
+    expect(client.deleteFile).toHaveBeenCalledWith({ fileId: "drive-original" });
+    expect(client.deleteFile).toHaveBeenCalledTimes(1);
+  });
 });
 
 describe("Google Drive client boundary", () => {
@@ -172,6 +222,62 @@ describe("Google Drive client boundary", () => {
     expect(init?.headers).toEqual(expect.objectContaining({ Authorization: "Bearer access-token" }));
     expect(await (init?.body as Blob).text()).toContain('"parents":["private-folder"]');
     expect(await (init?.body as Blob).text()).not.toContain("permissions");
+  });
+
+  it("constructs the environment client through the injectable auth factory", () => {
+    const authClient = { getAccessToken: async () => "access-token" };
+    const createAuthClient = vi.fn(() => authClient);
+
+    const client = createGoogleDriveMediaClientFromEnvironment({
+      GOOGLE_SERVICE_ACCOUNT_EMAIL: "service@example.test",
+      GOOGLE_PRIVATE_KEY: "line-1\\nline-2",
+      GOOGLE_DRIVE_FOLDER_ID: "private-folder",
+    }, fetch, createAuthClient);
+
+    expect(client).not.toBeNull();
+    expect(createAuthClient).toHaveBeenCalledWith({
+      email: "service@example.test",
+      key: "line-1\nline-2",
+      scopes: ["https://www.googleapis.com/auth/drive.file"],
+    });
+  });
+});
+
+describe("environment-backed media delivery URLs", () => {
+  it("creates short-lived HTTPS URLs for provider IDs without adding them to stored metadata", () => {
+    const delivery = createProviderMediaDeliveryUrls({
+      providerFileId: "drive-original",
+      previewProviderFileId: "drive-preview",
+      environment: {
+        APP_PUBLIC_BASE_URL: "https://studio.example",
+        INDY_MEDIA_SIGNING_SECRET: signingSecret,
+      },
+      now: () => nowSeconds,
+    });
+
+    const original = new URL(delivery.originalContentUrl);
+    const preview = new URL(delivery.previewImageUrl);
+    expect(original.protocol).toBe("https:");
+    expect(original.searchParams.get("expiresAt")).toBe(String(nowSeconds + 300));
+    expect(preview.searchParams.get("purpose")).toBe("preview");
+    expect(verifyMediaDeliveryUrl({
+      url: delivery.originalContentUrl,
+      expectedFileId: "drive-original",
+      secret: signingSecret,
+      now: nowSeconds,
+    })).toBe(true);
+  });
+
+  it("rejects a non-HTTPS public base URL", () => {
+    expect(() => createProviderMediaDeliveryUrls({
+      providerFileId: "drive-original",
+      previewProviderFileId: "drive-preview",
+      environment: {
+        APP_PUBLIC_BASE_URL: "http://studio.example",
+        INDY_MEDIA_SIGNING_SECRET: signingSecret,
+      },
+      now: () => nowSeconds,
+    })).toThrow("APP_PUBLIC_BASE_URL must be an absolute HTTPS URL");
   });
 });
 

@@ -1,4 +1,4 @@
-import { createSign } from "node:crypto";
+import { JWT } from "google-auth-library";
 
 export type Fetcher = (input: RequestInfo | URL, init?: RequestInit) => Promise<Response>;
 
@@ -12,6 +12,7 @@ export interface GoogleDriveMediaClient {
     mimeType: string;
     bytes: Uint8Array;
   }): Promise<{ fileId: string }>;
+  deleteFile(input: { fileId: string }): Promise<void>;
   streamFile(input: { fileId: string; range?: string }): Promise<Response>;
 }
 
@@ -21,20 +22,19 @@ type GoogleDriveMediaClientOptions = {
   fetcher?: Fetcher;
 };
 
-type ServiceAccountAuthOptions = {
-  serviceAccountEmail: string;
-  privateKey: string;
-  fetcher?: Fetcher;
-  now?: () => number;
+export type GoogleAuthClientFactory = (options: {
+  email: string;
+  key: string;
+  scopes: string[];
+}) => AccessTokenAuthClient;
+
+type Environment = Readonly<Record<string, string | undefined>>;
+
+const defaultGoogleAuthClientFactory: GoogleAuthClientFactory = (options) => {
+  return new JWT(options);
 };
 
 const DRIVE_SCOPE = "https://www.googleapis.com/auth/drive.file";
-const TOKEN_URL = "https://oauth2.googleapis.com/token";
-
-function encodeBase64Url(value: string | Uint8Array): string {
-  const bytes = typeof value === "string" ? Buffer.from(value, "utf8") : Buffer.from(value);
-  return bytes.toString("base64url");
-}
 
 function resolveAccessToken(result: Awaited<ReturnType<AccessTokenAuthClient["getAccessToken"]>>): string {
   const token = typeof result === "string" ? result : result?.token;
@@ -96,6 +96,18 @@ export function createGoogleDriveMediaClient({
       return { fileId: payload.id };
     },
 
+    async deleteFile({ fileId }) {
+      const accessToken = resolveAccessToken(await authClient.getAccessToken());
+      const response = await fetcher(
+        `https://www.googleapis.com/drive/v3/files/${encodeURIComponent(fileId)}`,
+        {
+          method: "DELETE",
+          headers: { Authorization: `Bearer ${accessToken}` },
+        },
+      );
+      if (!response.ok && response.status !== 404) throw new Error("Google Drive rejected the cleanup");
+    },
+
     async streamFile({ fileId, range }) {
       const accessToken = resolveAccessToken(await authClient.getAccessToken());
       const headers: Record<string, string> = { Authorization: `Bearer ${accessToken}` };
@@ -110,54 +122,10 @@ export function createGoogleDriveMediaClient({
   };
 }
 
-/**
- * Minimal service-account OAuth adapter used because google-auth-library is not
- * part of this workspace. It supports the JWT bearer flow needed by Drive and
- * intentionally does not implement domain-wide delegation or token caching.
- */
-export function createServiceAccountAuthClient({
-  serviceAccountEmail,
-  privateKey,
-  fetcher = fetch,
-  now = () => Math.floor(Date.now() / 1_000),
-}: ServiceAccountAuthOptions): AccessTokenAuthClient {
-  return {
-    async getAccessToken() {
-      const issuedAt = now();
-      const header = encodeBase64Url(JSON.stringify({ alg: "RS256", typ: "JWT" }));
-      const claim = encodeBase64Url(JSON.stringify({
-        iss: serviceAccountEmail,
-        scope: DRIVE_SCOPE,
-        aud: TOKEN_URL,
-        iat: issuedAt,
-        exp: issuedAt + 3_600,
-      }));
-      const unsignedAssertion = `${header}.${claim}`;
-      const signer = createSign("RSA-SHA256");
-      signer.update(unsignedAssertion);
-      signer.end();
-      const signature = signer.sign(privateKey.replace(/\\n/g, "\n"));
-      const assertion = `${unsignedAssertion}.${encodeBase64Url(signature)}`;
-      const body = new URLSearchParams({
-        grant_type: "urn:ietf:params:oauth:grant-type:jwt-bearer",
-        assertion,
-      });
-      const response = await fetcher(TOKEN_URL, {
-        method: "POST",
-        headers: { "Content-Type": "application/x-www-form-urlencoded" },
-        body,
-      });
-      if (!response.ok) throw new Error("Google authentication rejected the service account");
-      const payload = await response.json() as { access_token?: string };
-      if (!payload.access_token) throw new Error("Google authentication did not return an access token");
-      return { token: payload.access_token };
-    },
-  };
-}
-
 export function createGoogleDriveMediaClientFromEnvironment(
-  environment: NodeJS.ProcessEnv = process.env,
+  environment: Environment = process.env,
   fetcher: Fetcher = fetch,
+  createAuthClient: GoogleAuthClientFactory = defaultGoogleAuthClientFactory,
 ): GoogleDriveMediaClient | null {
   const serviceAccountEmail = environment.GOOGLE_SERVICE_ACCOUNT_EMAIL;
   const privateKey = environment.GOOGLE_PRIVATE_KEY;
@@ -167,6 +135,10 @@ export function createGoogleDriveMediaClientFromEnvironment(
   return createGoogleDriveMediaClient({
     folderId,
     fetcher,
-    authClient: createServiceAccountAuthClient({ serviceAccountEmail, privateKey, fetcher }),
+    authClient: createAuthClient({
+      email: serviceAccountEmail,
+      key: privateKey.replace(/\\n/g, "\n"),
+      scopes: [DRIVE_SCOPE],
+    }),
   });
 }
