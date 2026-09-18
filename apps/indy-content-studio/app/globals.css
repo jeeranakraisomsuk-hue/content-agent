@@ -151,3 +151,41 @@ button:disabled { opacity: .5; cursor: not-allowed; }
 @media (max-width: 700px) { .app-shell { padding: 10px; gap: 10px; } nav { width: 56px; padding: 7px; border-radius: 20px; } .rail-button { width: 38px; height: 38px; } .profile-chip span:last-child { display: none; } .today-overview { padding: 20px; } .today-heading-row { display: grid; } .today-layout { grid-template-columns: 1fr; } .today-aside { grid-template-columns: repeat(3, minmax(0, 1fr)); } .overview-aside-panel { padding: 11px; } .task-drawer { inset: 10px; width: auto; } .create-content-modal { padding: 20px; } .create-content-modal fieldset { grid-template-columns: 1fr; } }
 @media (prefers-reduced-transparency: reduce) { .today-overview, section, nav, .command-capsule, .task-drawer, .create-content-modal, .line-send-confirmation { background: #f6f3ee; backdrop-filter: none; } .create-modal-backdrop, .line-confirmation-backdrop { background: rgba(45,42,39,.52); backdrop-filter: none; } }
 @media (prefers-reduced-motion: reduce) { *, *::before, *::after { scroll-behavior: auto !important; transition-duration: 0.01ms !important; animation-duration: 0.01ms !important; animation-iteration-count: 1 !important; } }
+
+.settings-workspace { display: grid; gap: 20px; }
+.workspace-heading-row, .settings-panel-heading { display: flex; align-items: start; justify-content: space-between; gap: 16px; }
+.workspace-heading-row h1, .settings-panel h2 { margin: 0; }
+.workspace-heading-row p:last-child { margin-bottom: 0; color: rgba(45,42,39,.7); }
+.settings-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
+.settings-panel { display: grid; align-content: start; gap: 14px; padding: 18px; }
+.settings-panel > button, .settings-panel-heading button, .settings-dialog-actions button, .settings-item-actions button { border: 0; border-radius: 10px; padding: 8px 11px; background: rgba(135,156,129,.2); color: var(--focus); cursor: pointer; font-weight: 700; }
+.settings-panel-heading button { flex: 0 0 auto; }
+.settings-list { display: grid; gap: 8px; }
+.settings-item { display: flex; align-items: start; justify-content: space-between; gap: 12px; margin: 0; padding: 12px; min-width: 0; }
+.settings-item-main { display: grid; gap: 6px; min-width: 0; }
+.settings-item-main strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.settings-item small { grid-column: 1 / -1; color: #8b4439; }
+.settings-item:has(small) { display: grid; grid-template-columns: 1fr auto; }
+.settings-item-actions { display: flex; flex-wrap: wrap; gap: 6px; justify-content: end; }
+.settings-item-actions button:last-child { background: rgba(201,120,104,.14); color: #8b4439; }
+.settings-item-actions button:disabled { opacity: .55; }
+.settings-checkbox { display: flex; align-items: center; gap: 6px; color: rgba(45,42,39,.68); font-size: 12px; font-weight: 400; }
+.settings-checkbox input { accent-color: var(--sage); }
+.settings-meta { color: rgba(45,42,39,.62); font-size: 12px; }
+.settings-panel > label { display: grid; gap: 6px; font-size: 13px; font-weight: 700; }
+.settings-panel > label input { width: 100%; padding: 9px 10px; border: 1px solid rgba(45,42,39,.16); border-radius: 10px; background: rgba(255,255,255,.7); }
+.settings-notice { margin: 0; padding: 9px 12px; border-radius: 10px; font-size: 13px; font-weight: 700; }
+.settings-notice.success { background: rgba(135,156,129,.18); color: var(--focus); }
+.settings-notice.error { background: rgba(201,120,104,.16); color: #8b4439; }
+.health-dot { padding: 4px 7px; border-radius: 999px; font-size: 11px; font-weight: 700; }
+.health-dot.connected { background: rgba(135,156,129,.18); color: var(--focus); }
+.health-dot.disconnected { background: rgba(45,42,39,.09); color: rgba(45,42,39,.64); }
+.health-dot.error { background: rgba(201,120,104,.16); color: #8b4439; }
+.settings-dialog-backdrop { position: fixed; z-index: 7; inset: 0; display: grid; place-items: center; padding: 20px; background: rgba(45,42,39,.3); backdrop-filter: blur(3px); }
+.settings-dialog { display: grid; width: min(440px, 100%); gap: 14px; padding: 24px; border: 1px solid var(--glass-border); border-radius: 22px; background: rgba(246,243,238,.96); box-shadow: 0 25px 70px rgba(73,58,44,.25); }
+.settings-dialog h2 { margin: 0; }
+.settings-dialog label { display: grid; gap: 6px; font-size: 13px; font-weight: 700; }
+.settings-dialog input, .settings-dialog select { width: 100%; padding: 9px 10px; border: 1px solid rgba(45,42,39,.16); border-radius: 10px; background: rgba(255,255,255,.7); }
+.settings-dialog-actions { display: flex; justify-content: end; gap: 8px; }
+.settings-dialog-actions button:first-child { background: rgba(255,255,255,.58); color: var(--ink); }
+@media (max-width: 760px) { .settings-grid { grid-template-columns: 1fr; } .workspace-heading-row { display: grid; } }

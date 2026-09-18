@@ -13,6 +13,7 @@ import { useDashboardWorkspace } from "../features/dashboard/useDashboardWorkspa
 import { DashboardDataProvider, useDashboardData } from "../features/data/DashboardDataProvider";
 import { upsertContent } from "../features/data/dashboard-commands";
 import type { DashboardRepository } from "../features/data/dashboard-repository";
+import { SettingsWorkspace } from "../features/settings/components/SettingsWorkspace";
 
 const initialTasks: DashboardTask[] = [
   { id: "reels", title: "ตัดต่อคลิป Reels เทคนิคทรงผม", priority: "urgent", scheduledTime: "10:30", workflowStage: "ตัดต่อ", lastWorkedAt: "2026-09-18T10:18:00.000Z" },
@@ -87,7 +88,8 @@ function HomePageContent() {
         <CreateContentModal open={workspace.isCreateOpen} onClose={() => workspace.setCreateOpen(false)} onCreate={createTask} />
       </>}
       {activeWorkspace === "production-board" && <ProductionBoard items={todayTasks.map((task) => ({ id: task.id, title: task.title, status: task.workflowStage ?? "วางแผน" }))} />}
-      {activeWorkspace !== "overview" && activeWorkspace !== "production-board" && <DeferredWorkspace item={activeWorkspace} />}
+      {activeWorkspace === "settings" && <SettingsWorkspace />}
+      {activeWorkspace !== "overview" && activeWorkspace !== "production-board" && activeWorkspace !== "settings" && <DeferredWorkspace item={activeWorkspace} />}
     </main>
   </AppShell>;
 }
