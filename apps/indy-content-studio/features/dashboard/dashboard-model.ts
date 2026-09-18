@@ -5,6 +5,9 @@ export interface DashboardTask {
   title: string;
   priority: TaskPriority;
   scheduledTime: string;
+  workflowStage?: string;
+  lastWorkedAt?: string;
+  isComplete?: boolean;
 }
 
 const priorityOrder: Record<TaskPriority, number> = {
