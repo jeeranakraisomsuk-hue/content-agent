@@ -57,8 +57,11 @@ describe("MediaLibraryWorkspace", () => {
     expect(await screen.findByRole("alert")).toHaveTextContent("ต้องเป็นลิงก์ https");
   });
 
-  it("keeps the local blob and labels it local-only while Drive is disconnected", async () => {
-    const fetcher = vi.fn();
+  it("asks the server for Drive availability and keeps a 503 upload local-only", async () => {
+    const fetcher = vi.fn().mockResolvedValue(Response.json(
+      { error: "ยังไม่ได้เชื่อมต่อ Google Drive" },
+      { status: 503 },
+    ));
     vi.stubGlobal("fetch", fetcher);
     const { blobStore, repository } = renderLibrary();
     const file = new File(["image"], "เก็บในเครื่อง.jpg", { type: "image/jpeg" });
@@ -69,7 +72,7 @@ describe("MediaLibraryWorkspace", () => {
     const [asset] = (await repository.read()).media;
     expect(asset.remoteStatus).toBe("local-only");
     expect(await blobStore.get(asset.id)).toBe(file);
-    expect(fetcher).not.toHaveBeenCalled();
+    expect(fetcher).toHaveBeenCalledWith("/api/media/upload", expect.objectContaining({ method: "POST" }));
   });
 
   it("stores provider identifiers only after Drive confirms the upload", async () => {

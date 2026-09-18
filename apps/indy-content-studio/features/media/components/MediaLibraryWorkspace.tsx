@@ -60,7 +60,6 @@ export function MediaLibraryWorkspace({ blobStore }: { blobStore?: MediaBlobStor
     return <section aria-labelledby="media-heading"><h1 id="media-heading">คลังสื่อ</h1><p>กำลังโหลดข้อมูล…</p></section>;
   }
 
-  const driveConnected = dashboard.state.integrations.some((integration) => integration.provider === "google-drive" && integration.status === "connected");
   const assets = dashboard.state.media
     .filter((asset) => (tab === "trash" ? Boolean(asset.deletedAt) : !asset.deletedAt))
     .filter((asset) => asset.name.toLocaleLowerCase().includes(query.toLocaleLowerCase()));
@@ -73,11 +72,6 @@ export function MediaLibraryWorkspace({ blobStore }: { blobStore?: MediaBlobStor
   }
 
   async function uploadToProvider(asset: MediaAsset, source: Blob) {
-    if (!driveConnected) {
-      await setRemoteState(asset.id, { remoteStatus: "local-only", providerFileId: null, previewProviderFileId: null });
-      return;
-    }
-
     await setRemoteState(asset.id, { remoteStatus: "uploading", providerFileId: null, previewProviderFileId: null });
     try {
       const file = fileFromBlob(source, asset);
@@ -120,25 +114,23 @@ export function MediaLibraryWorkspace({ blobStore }: { blobStore?: MediaBlobStor
       await activeBlobStore.put(id, file);
       await dashboard.mutate((state) => createUploadedMedia(state, { id, name: file.name, mimeType: file.type, size: file.size, now }));
       setError(null);
-      if (driveConnected) {
-        await uploadToProvider({
-          id,
-          name: file.name,
-          mimeType: file.type || "application/octet-stream",
-          size: file.size,
-          source: "upload",
-          externalUrl: null,
-          externalPreviewUrl: null,
-          blobKey: id,
-          remoteStatus: "local-only",
-          providerFileId: null,
-          previewProviderFileId: null,
-          tags: [],
-          createdAt: now,
-          updatedAt: now,
-          deletedAt: null,
-        }, file);
-      }
+      await uploadToProvider({
+        id,
+        name: file.name,
+        mimeType: file.type || "application/octet-stream",
+        size: file.size,
+        source: "upload",
+        externalUrl: null,
+        externalPreviewUrl: null,
+        blobKey: id,
+        remoteStatus: "local-only",
+        providerFileId: null,
+        previewProviderFileId: null,
+        tags: [],
+        createdAt: now,
+        updatedAt: now,
+        deletedAt: null,
+      }, file);
     } catch (caught) {
       await activeBlobStore.remove(id).catch(() => undefined);
       setError(caught instanceof Error ? caught.message : "อัปโหลดไม่สำเร็จ");
