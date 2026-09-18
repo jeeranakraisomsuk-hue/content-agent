@@ -14,6 +14,7 @@ import { DashboardDataProvider, useDashboardData } from "../features/data/Dashbo
 import { upsertContent } from "../features/data/dashboard-commands";
 import type { DashboardRepository } from "../features/data/dashboard-repository";
 import { SettingsWorkspace } from "../features/settings/components/SettingsWorkspace";
+import { MediaLibraryWorkspace } from "../features/media/components/MediaLibraryWorkspace";
 
 const initialTasks: DashboardTask[] = [
   { id: "reels", title: "ตัดต่อคลิป Reels เทคนิคทรงผม", priority: "urgent", scheduledTime: "10:30", workflowStage: "ตัดต่อ", lastWorkedAt: "2026-09-18T10:18:00.000Z" },
@@ -89,7 +90,8 @@ function HomePageContent() {
       </>}
       {activeWorkspace === "production-board" && <ProductionBoard items={todayTasks.map((task) => ({ id: task.id, title: task.title, status: task.workflowStage ?? "วางแผน" }))} />}
       {activeWorkspace === "settings" && <SettingsWorkspace />}
-      {activeWorkspace !== "overview" && activeWorkspace !== "production-board" && activeWorkspace !== "settings" && <DeferredWorkspace item={activeWorkspace} />}
+      {activeWorkspace === "media-library" && <MediaLibraryWorkspace />}
+      {activeWorkspace !== "overview" && activeWorkspace !== "production-board" && activeWorkspace !== "settings" && activeWorkspace !== "media-library" && <DeferredWorkspace item={activeWorkspace} />}
     </main>
   </AppShell>;
 }

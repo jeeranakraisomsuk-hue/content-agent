@@ -8,6 +8,8 @@ import {
 
 const STORE_NAME = "dashboard";
 const SNAPSHOT_KEY = "current";
+const DATABASE_VERSION = 2;
+const MEDIA_BLOB_STORE_NAME = "media-blobs";
 
 interface IndexedDbOptions {
   databaseName?: string;
@@ -62,11 +64,14 @@ export class IndexedDbDashboardRepository implements DashboardRepository {
     if (typeof indexedDB === "undefined") return Promise.reject(unavailableError());
 
     return new Promise((resolve, reject) => {
-      const request = indexedDB.open(this.databaseName, 1);
+      const request = indexedDB.open(this.databaseName, DATABASE_VERSION);
 
       request.onupgradeneeded = () => {
         if (!request.result.objectStoreNames.contains(STORE_NAME)) {
           request.result.createObjectStore(STORE_NAME);
+        }
+        if (!request.result.objectStoreNames.contains(MEDIA_BLOB_STORE_NAME)) {
+          request.result.createObjectStore(MEDIA_BLOB_STORE_NAME);
         }
       };
       request.onsuccess = () => resolve(request.result);
