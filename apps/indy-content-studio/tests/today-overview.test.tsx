@@ -28,7 +28,7 @@ describe("TodayOverview", () => {
     const openTask = vi.fn();
     const resumeLatest = vi.fn();
 
-    render(<TodayOverview tasks={tasks} state="ready" onOpenTask={openTask} onResumeLatest={resumeLatest} />);
+    render(<TodayOverview tasks={tasks} state="ready" onOpenTask={openTask} onResumeLatest={resumeLatest} onRetry={vi.fn()} />);
 
     expect(screen.getByRole("heading", { name: "กำหนดการวันนี้" })).toBeVisible();
     expect(screen.getByRole("button", { name: "ทำงานล่าสุดต่อ" })).toBeVisible();
@@ -48,9 +48,19 @@ describe("TodayOverview", () => {
     ["empty", "ยังไม่มีงานสำหรับวันนี้"],
     ["error", "ลองใหม่"],
   ] as const)("shows a useful %s state", (state, expectedText) => {
-    render(<TodayOverview tasks={[]} state={state} onOpenTask={vi.fn()} onResumeLatest={vi.fn()} />);
+    render(<TodayOverview tasks={[]} state={state} onOpenTask={vi.fn()} onResumeLatest={vi.fn()} onRetry={vi.fn()} />);
 
     expect(screen.getByText(expectedText)).toBeVisible();
+  });
+
+  it("retries the error state through its callback", () => {
+    const retry = vi.fn();
+
+    render(<TodayOverview tasks={[]} state="error" onOpenTask={vi.fn()} onResumeLatest={vi.fn()} onRetry={retry} />);
+
+    fireEvent.click(screen.getByRole("button", { name: "ลองใหม่" }));
+
+    expect(retry).toHaveBeenCalledOnce();
   });
 });
 

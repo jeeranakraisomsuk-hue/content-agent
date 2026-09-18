@@ -2,8 +2,9 @@
 
 import { AppShell } from "./AppShell";
 import { DashboardPreview } from "../features/dashboard/components/DashboardPreview";
-import { TodayOverview } from "../features/dashboard/components/TodayOverview";
+import { TodayOverview, type TodayOverviewState } from "../features/dashboard/components/TodayOverview";
 import { useDashboardWorkspace } from "../features/dashboard/useDashboardWorkspace";
+import { useState } from "react";
 
 const todayTasks = [
   { id: "reels", title: "ตัดต่อคลิป Reels เทคนิคทรงผม", priority: "urgent" as const, scheduledTime: "10:30", workflowStage: "ตัดต่อ", lastWorkedAt: "2026-09-18T10:18:00.000Z" },
@@ -13,19 +14,42 @@ const todayTasks = [
 
 export default function HomePage() {
   const workspace = useDashboardWorkspace(todayTasks);
+  const [todayState, setTodayState] = useState<TodayOverviewState>("ready");
+  const [continuationNotice, setContinuationNotice] = useState<string | null>(null);
+  const selectedTask = todayTasks.find((task) => task.id === workspace.selectedTaskId);
+
+  function continueSelectedTask() {
+    if (selectedTask) {
+      setContinuationNotice(`พร้อมทำงานต่อที่ขั้นตอน ${selectedTask.workflowStage}`);
+    }
+  }
 
   return (
     <AppShell>
       <main>
         <TodayOverview
           tasks={todayTasks}
-          state="ready"
-          onOpenTask={(task) => workspace.openTask(task.id)}
+          state={todayState}
+          onOpenTask={(task) => {
+            setContinuationNotice(null);
+            workspace.openTask(task.id);
+          }}
           onResumeLatest={workspace.resumeLatest}
+          onRetry={() => setTodayState("ready")}
         />
-        <p className="selected-workflow" aria-live="polite">
-          {workspace.selectedTaskId ? `เปิดขั้นตอนทำงานของ ${todayTasks.find((task) => task.id === workspace.selectedTaskId)?.title}` : "เลือกงานเพื่อเปิดขั้นตอนการทำงาน"}
-        </p>
+        {selectedTask ? (
+          <section className="selected-workflow" aria-label={`ทำงานต่อกับ ${selectedTask.title}`}>
+            <p className="eyebrow">กำลังทำงานต่อ</p>
+            <h2>{selectedTask.title}</h2>
+            <p>ขั้นตอนปัจจุบัน: {selectedTask.workflowStage}</p>
+            <button type="button" className="continue-work-button" onClick={continueSelectedTask}>
+              ดำเนินงานต่อที่ขั้นตอน {selectedTask.workflowStage}
+            </button>
+            {continuationNotice && <p className="continuation-notice" role="status">{continuationNotice}</p>}
+          </section>
+        ) : (
+          <p className="selected-workflow-hint" aria-live="polite">เลือกงานเพื่อเปิดขั้นตอนการทำงาน</p>
+        )}
         <DashboardPreview />
       </main>
     </AppShell>

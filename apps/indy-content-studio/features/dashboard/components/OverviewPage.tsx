@@ -13,7 +13,7 @@ export function OverviewPage({ overview }: { overview: DashboardOverview }) {
   return (
     <section aria-labelledby="overview-heading">
       <p>PLAN · CREATE · PUBLISH</p>
-      <h1 id="overview-heading">ภาพรวมและเป้าหมาย</h1>
+      <h2 id="overview-heading">ภาพรวมและเป้าหมาย</h2>
       <p>วางแผนชิ้นงานและจัดการสื่อของทีม INDY</p>
       <div>
         {cards.map((card) => (

@@ -7,6 +7,7 @@ interface TodayOverviewProps {
   state: TodayOverviewState;
   onOpenTask: (task: DashboardTask) => void;
   onResumeLatest: () => void;
+  onRetry: () => void;
 }
 
 const priorityLabels = {
@@ -38,7 +39,7 @@ function TaskCard({ task, onOpenTask }: { task: DashboardTask; onOpenTask: (task
   );
 }
 
-export function TodayOverview({ tasks, state, onOpenTask, onResumeLatest }: TodayOverviewProps) {
+export function TodayOverview({ tasks, state, onOpenTask, onResumeLatest, onRetry }: TodayOverviewProps) {
   const sortedTasks = sortTasksForToday(tasks);
 
   return (
@@ -61,7 +62,7 @@ export function TodayOverview({ tasks, state, onOpenTask, onResumeLatest }: Toda
           {state === "error" && (
             <div className="overview-state" role="alert">
               <p>เปิดกำหนดการวันนี้ไม่สำเร็จ</p>
-              <button type="button" className="retry-button">ลองใหม่</button>
+              <button type="button" className="retry-button" onClick={onRetry}>ลองใหม่</button>
             </div>
           )}
           {state === "ready" && sortedTasks.map((task) => <TaskCard key={task.id} task={task} onOpenTask={onOpenTask} />)}
