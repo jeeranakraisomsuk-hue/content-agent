@@ -3,7 +3,7 @@ import { createHmac, timingSafeEqual } from "node:crypto";
 export type MediaDeliveryPurpose = "original" | "preview";
 
 const DEFAULT_DELIVERY_TTL_SECONDS = 300;
-const MAX_DELIVERY_TTL_SECONDS = 900;
+const MAX_DELIVERY_TTL_SECONDS = 3_600;
 type Environment = Readonly<Record<string, string | undefined>>;
 
 type MediaDeliveryFields = {
@@ -60,7 +60,7 @@ export function createEnvironmentMediaDeliveryUrl({
   }
   if (!secret) throw new Error("INDY_MEDIA_SIGNING_SECRET is required");
   if (!Number.isSafeInteger(ttlSeconds) || ttlSeconds < 1 || ttlSeconds > MAX_DELIVERY_TTL_SECONDS) {
-    throw new Error("Media delivery TTL must be between 1 and 900 seconds");
+    throw new Error("Media delivery TTL must be between 1 and 3600 seconds");
   }
 
   return createMediaDeliveryUrl({

@@ -79,7 +79,7 @@ export function createGoogleDriveMediaClient({
       const boundary = `indy-media-${crypto.randomUUID()}`;
       const body = createMultipartBody({ boundary, folderId, name, mimeType, bytes });
       const response = await fetcher(
-        "https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id",
+        "https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id&supportsAllDrives=true",
         {
           method: "POST",
           headers: {
@@ -99,7 +99,7 @@ export function createGoogleDriveMediaClient({
     async deleteFile({ fileId }) {
       const accessToken = resolveAccessToken(await authClient.getAccessToken());
       const response = await fetcher(
-        `https://www.googleapis.com/drive/v3/files/${encodeURIComponent(fileId)}`,
+        `https://www.googleapis.com/drive/v3/files/${encodeURIComponent(fileId)}?supportsAllDrives=true`,
         {
           method: "DELETE",
           headers: { Authorization: `Bearer ${accessToken}` },
@@ -113,7 +113,7 @@ export function createGoogleDriveMediaClient({
       const headers: Record<string, string> = { Authorization: `Bearer ${accessToken}` };
       if (range) headers.Range = range;
       const response = await fetcher(
-        `https://www.googleapis.com/drive/v3/files/${encodeURIComponent(fileId)}?alt=media`,
+        `https://www.googleapis.com/drive/v3/files/${encodeURIComponent(fileId)}?alt=media&supportsAllDrives=true`,
         { headers },
       );
       if (!response.ok && response.status !== 206) throw new Error("Google Drive rejected the download");

@@ -3,4 +3,5 @@ import { createMediaUploadHandler } from "../../../../features/media/server/medi
 
 export const POST = createMediaUploadHandler({
   getClient: () => createGoogleDriveMediaClientFromEnvironment(),
+  allowedOrigin: process.env.APP_PUBLIC_BASE_URL,
 });

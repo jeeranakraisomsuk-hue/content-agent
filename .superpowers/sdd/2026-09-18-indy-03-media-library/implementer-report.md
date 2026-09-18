@@ -9,7 +9,11 @@
 - Review correction: added pinned `google-auth-library@10.3.0` to `package.json` and `pnpm-lock.yaml`; production constructs `JWT` through an injectable auth factory while tests use fakes only.
 - Review correction: moved handler factories into `features/media/server`; Next route modules now export only `POST` or `GET`.
 - Review correction: video detection uses MIME or a known video extension, JPEG previews enforce the same 50 MiB limit, and a failed preview upload triggers a best-effort deletion of the already-uploaded original.
-- Delivery integration: `createProviderMediaDeliveryUrls` turns persisted provider IDs into HTTPS URLs signed from `APP_PUBLIC_BASE_URL` and `INDY_MEDIA_SIGNING_SECRET` with a 300-second default TTL (900-second maximum). URLs are generated on demand and are not part of stored media metadata or the upload response.
+- Delivery integration: `createProviderMediaDeliveryUrls` turns persisted provider IDs into HTTPS URLs signed from `APP_PUBLIC_BASE_URL` and `INDY_MEDIA_SIGNING_SECRET` with a 300-second default TTL and an explicit override up to 3,600 seconds. URLs are generated on demand and are not part of stored media metadata or the upload response.
 - Corrective focused verification: `pnpm exec vitest run tests/media-store.test.ts tests/media-commands.test.ts tests/media-library.test.tsx tests/media-upload-route.test.ts` — 4 files, 28 tests passed.
 - Corrective TypeScript verification: `pnpm typecheck` — passed.
 - Corrective production verification: `pnpm build` — passed; `/api/media/upload` and `/api/media/provider/[fileId]` were emitted as dynamic routes.
+- Final provider compatibility: Drive upload, stream, and cleanup requests include `supportsAllDrives=true` for shared-drive service-account storage.
+- Final upload boundary: when `APP_PUBLIC_BASE_URL` is configured, `POST /api/media/upload` rejects missing or mismatched `Origin` headers with `403` before contacting Drive. This is a same-origin browser guard, not a replacement for account authentication.
+- Final cross-job compatibility: delivery URLs retain a 300-second default TTL and accept explicit 1,800- and 3,600-second integration TTLs.
+- Final verification: `pnpm exec vitest run tests/media-upload-route.test.ts` — 25 tests passed; `pnpm typecheck` and `pnpm build` both passed.

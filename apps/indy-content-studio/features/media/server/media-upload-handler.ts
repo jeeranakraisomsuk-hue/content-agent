@@ -16,6 +16,7 @@ const VIDEO_FILE_EXTENSIONS = new Set([
 
 type MediaUploadDependencies = {
   getClient: () => GoogleDriveMediaClient | null | Promise<GoogleDriveMediaClient | null>;
+  allowedOrigin?: string | null;
 };
 
 function isUploadedFile(value: FormDataEntryValue | null): value is File {
@@ -28,8 +29,21 @@ function isVideoFile(file: File): boolean {
   return extension ? VIDEO_FILE_EXTENSIONS.has(extension) : false;
 }
 
-export function createMediaUploadHandler({ getClient }: MediaUploadDependencies) {
+function hasAllowedOrigin(request: Request, allowedOrigin: string | null | undefined): boolean {
+  if (!allowedOrigin) return true;
+  try {
+    return request.headers.get("origin") === new URL(allowedOrigin).origin;
+  } catch {
+    return false;
+  }
+}
+
+export function createMediaUploadHandler({ getClient, allowedOrigin }: MediaUploadDependencies) {
   return async function handleMediaUpload(request: Request): Promise<Response> {
+    if (!hasAllowedOrigin(request, allowedOrigin)) {
+      return Response.json({ error: "ไม่อนุญาตให้อัปโหลดจากต้นทางนี้" }, { status: 403 });
+    }
+
     const client = await getClient();
     if (!client) {
       return Response.json({ error: "ยังไม่ได้เชื่อมต่อ Google Drive" }, { status: 503 });

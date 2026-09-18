@@ -59,6 +59,27 @@ afterEach(() => {
 });
 
 describe("POST /api/media/upload", () => {
+  it.each([
+    ["mismatched", "https://attacker.example"],
+    ["missing", null],
+  ])("rejects a %s request origin before contacting Drive", async (_label, origin) => {
+    const client = fakeClient();
+    const handler = createMediaUploadHandler({
+      getClient: () => client,
+      allowedOrigin: "https://studio.example",
+    });
+    const request = formRequest({
+      assetId: "asset-cross-origin",
+      file: new File(["image"], "photo.jpg", { type: "image/jpeg" }),
+    });
+    if (origin) request.headers.set("Origin", origin);
+
+    const response = await handler(request);
+
+    expect(response.status).toBe(403);
+    expect(client.uploadFile).not.toHaveBeenCalled();
+  });
+
   it("returns 503 when Google Drive is disconnected", async () => {
     const handler = createMediaUploadHandler({ getClient: () => null });
 
@@ -218,10 +239,43 @@ describe("Google Drive client boundary", () => {
       bytes: new Uint8Array([1, 2, 3]),
     })).resolves.toEqual({ fileId: "drive-file-1" });
 
-    const init = fetcher.mock.calls[0]?.[1];
+    const [input, init] = fetcher.mock.calls[0] ?? [];
+    expect(new URL(String(input)).searchParams.get("supportsAllDrives")).toBe("true");
     expect(init?.headers).toEqual(expect.objectContaining({ Authorization: "Bearer access-token" }));
     expect(await (init?.body as Blob).text()).toContain('"parents":["private-folder"]');
     expect(await (init?.body as Blob).text()).not.toContain("permissions");
+  });
+
+  it("uses shared-drive support when streaming a file", async () => {
+    const fetcher = vi.fn(async (_input: RequestInfo | URL, _init?: RequestInit) => new Response("partial", { status: 206 }));
+    const client = createGoogleDriveMediaClient({
+      folderId: "private-folder",
+      authClient: { getAccessToken: async () => "access-token" },
+      fetcher,
+    });
+
+    await client.streamFile({ fileId: "drive-file-1", range: "bytes=10-16" });
+
+    const [input, init] = fetcher.mock.calls[0] ?? [];
+    const url = new URL(String(input));
+    expect(url.searchParams.get("alt")).toBe("media");
+    expect(url.searchParams.get("supportsAllDrives")).toBe("true");
+    expect(init?.headers).toEqual(expect.objectContaining({ Range: "bytes=10-16" }));
+  });
+
+  it("uses shared-drive support when deleting a partial upload", async () => {
+    const fetcher = vi.fn(async (_input: RequestInfo | URL, _init?: RequestInit) => new Response(null, { status: 204 }));
+    const client = createGoogleDriveMediaClient({
+      folderId: "private-folder",
+      authClient: { getAccessToken: async () => "access-token" },
+      fetcher,
+    });
+
+    await client.deleteFile({ fileId: "drive-file-1" });
+
+    const [input, init] = fetcher.mock.calls[0] ?? [];
+    expect(new URL(String(input)).searchParams.get("supportsAllDrives")).toBe("true");
+    expect(init?.method).toBe("DELETE");
   });
 
   it("constructs the environment client through the injectable auth factory", () => {
@@ -278,6 +332,22 @@ describe("environment-backed media delivery URLs", () => {
       },
       now: () => nowSeconds,
     })).toThrow("APP_PUBLIC_BASE_URL must be an absolute HTTPS URL");
+  });
+
+  it.each([1_800, 3_600])("accepts an explicit %i-second integration TTL", (ttlSeconds) => {
+    const delivery = createProviderMediaDeliveryUrls({
+      providerFileId: "drive-original",
+      previewProviderFileId: "drive-preview",
+      environment: {
+        APP_PUBLIC_BASE_URL: "https://studio.example",
+        INDY_MEDIA_SIGNING_SECRET: signingSecret,
+      },
+      now: () => nowSeconds,
+      ttlSeconds,
+    });
+
+    expect(new URL(delivery.originalContentUrl).searchParams.get("expiresAt"))
+      .toBe(String(nowSeconds + ttlSeconds));
   });
 });
 
