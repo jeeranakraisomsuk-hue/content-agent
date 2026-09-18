@@ -1,6 +1,6 @@
 import { fireEvent, render, screen, within } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
-import HomePage from "../app/page";
+import { HomePage } from "../app/home-page-view";
 
 describe("HomePage", () => {
   it("keeps Today as the only page heading and exposes the selected task continuation", () => {
