@@ -3,7 +3,7 @@ import { describe, expect, it } from "vitest";
 import { AppShell } from "../app/AppShell";
 
 describe("AppShell", () => {
-  it("renders the live dashboard navigation labels", () => {
+  it("exposes labelled rail navigation and a workspace search field", () => {
     render(
       <AppShell>
         <main>content</main>
@@ -12,7 +12,10 @@ describe("AppShell", () => {
 
     expect(
       screen.getByRole("button", { name: "ภาพรวมและเป้าหมาย" }),
-    ).toBeVisible();
+    ).toHaveAttribute("data-tooltip", "ภาพรวมและเป้าหมาย");
     expect(screen.getByRole("button", { name: "บอร์ดการผลิต" })).toBeVisible();
+    expect(
+      screen.getByPlaceholderText("ค้นหาไฟล์ งาน หรือไอเดีย"),
+    ).toBeVisible();
   });
 });
