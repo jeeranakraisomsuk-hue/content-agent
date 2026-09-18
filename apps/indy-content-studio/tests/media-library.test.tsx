@@ -188,6 +188,31 @@ describe("MediaLibraryWorkspace", () => {
     expect((await repository.read()).media[0]).toMatchObject({ remoteStatus: "ready", providerFileId: "drive-stuck" });
   });
 
+  it("prevents overlapping retries while a live upload attempt is pending", async () => {
+    const now = "2026-09-18T00:00:00.000Z";
+    const state = createUploadedMedia(createEmptyDashboardState(), { id: "asset-race", name: "ห้ามซ้อน.jpg", mimeType: "image/jpeg", size: 5, now });
+    state.media[0].remoteStatus = "uploading";
+    let resolveHealth!: (response: Response) => void;
+    const fetcher = vi.fn()
+      .mockImplementationOnce(() => new Promise<Response>((resolve) => { resolveHealth = resolve; }))
+      .mockResolvedValueOnce(Response.json({ assetId: "asset-race", providerFileId: "drive-race", previewProviderFileId: "drive-race", remoteStatus: "ready" }));
+    vi.stubGlobal("fetch", fetcher);
+    const { blobStore, repository } = renderLibrary(state);
+    await blobStore.put("asset-race", new File(["image"], "ห้ามซ้อน.jpg", { type: "image/jpeg" }));
+    const retry = await screen.findByRole("button", { name: "ลองอัปโหลด ห้ามซ้อน.jpg อีกครั้ง" });
+
+    fireEvent.click(retry);
+    fireEvent.click(retry);
+
+    await waitFor(() => expect(screen.queryByRole("button", { name: "ลองอัปโหลด ห้ามซ้อน.jpg อีกครั้ง" })).not.toBeInTheDocument());
+    expect(fetcher).toHaveBeenCalledTimes(1);
+    resolveHealth(integrationHealth());
+
+    expect(await screen.findByText("พร้อมใช้ผ่าน Google Drive")).toBeVisible();
+    expect(fetcher).toHaveBeenCalledTimes(2);
+    expect((await repository.read()).media[0]).toMatchObject({ remoteStatus: "ready", providerFileId: "drive-race" });
+  });
+
   it("keeps the local blob when a provider-state write fails after metadata was committed", async () => {
     class FailingProviderStateRepository extends MemoryDashboardRepository {
       private writes = 0;

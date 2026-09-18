@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { useDashboardData } from "../../data/DashboardDataProvider";
 import type { MediaAsset } from "../../domain/types";
 import { createExternalMedia, createUploadedMedia, moveMediaToTrash, restoreMedia, updateMedia } from "../media-commands";
@@ -81,6 +81,8 @@ export function MediaLibraryWorkspace({ blobStore }: { blobStore?: MediaBlobStor
   const [externalKind, setExternalKind] = useState("video/mp4");
   const [preview, setPreview] = useState<MediaAsset | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const activeProviderAttempts = useRef(new Map<string, symbol>());
+  const [, setAttemptRevision] = useState(0);
 
   if (!dashboard.state) {
     return <section aria-labelledby="media-heading"><h1 id="media-heading">คลังสื่อ</h1><p>กำลังโหลดข้อมูล…</p></section>;
@@ -98,13 +100,20 @@ export function MediaLibraryWorkspace({ blobStore }: { blobStore?: MediaBlobStor
   }
 
   async function uploadToProvider(asset: MediaAsset, source: Blob) {
-    await setRemoteState(asset.id, { remoteStatus: "uploading", providerFileId: null, previewProviderFileId: null });
-    if (!await isDriveAvailable()) {
-      await setRemoteState(asset.id, { remoteStatus: "local-only", providerFileId: null, previewProviderFileId: null });
-      return;
-    }
+    if (activeProviderAttempts.current.has(asset.id)) return;
+    const attempt = Symbol(asset.id);
+    activeProviderAttempts.current.set(asset.id, attempt);
+    setAttemptRevision((revision) => revision + 1);
+    const isCurrentAttempt = () => activeProviderAttempts.current.get(asset.id) === attempt;
 
     try {
+      await setRemoteState(asset.id, { remoteStatus: "uploading", providerFileId: null, previewProviderFileId: null });
+      if (!isCurrentAttempt()) return;
+      if (!await isDriveAvailable()) {
+        if (isCurrentAttempt()) await setRemoteState(asset.id, { remoteStatus: "local-only", providerFileId: null, previewProviderFileId: null });
+        return;
+      }
+
       const file = fileFromBlob(source, asset);
       const form = new FormData();
       form.set("assetId", asset.id);
@@ -121,20 +130,33 @@ export function MediaLibraryWorkspace({ blobStore }: { blobStore?: MediaBlobStor
 
       const response = await fetch("/api/media/upload", { method: "POST", body: form });
       const result: unknown = await response.json().catch(() => null);
+      if (!isCurrentAttempt()) return;
       if (response.status === 503) {
         await setRemoteState(asset.id, { remoteStatus: "local-only", providerFileId: null, previewProviderFileId: null });
         return;
       }
       if (!response.ok || !isProviderUploadResult(result, asset.id)) throw new Error("provider-upload-failed");
 
-      await setRemoteState(asset.id, {
-        remoteStatus: "ready",
-        providerFileId: result.providerFileId,
-        previewProviderFileId: result.previewProviderFileId,
-      });
+      if (isCurrentAttempt()) {
+        await setRemoteState(asset.id, {
+          remoteStatus: "ready",
+          providerFileId: result.providerFileId,
+          previewProviderFileId: result.previewProviderFileId,
+        });
+      }
     } catch (caught) {
-      await setRemoteState(asset.id, { remoteStatus: "failed", providerFileId: null, previewProviderFileId: null });
-      if (caught instanceof Error && caught.message === "ไม่สามารถสร้างภาพตัวอย่างจากวิดีโอนี้ได้") setError(caught.message);
+      if (!isCurrentAttempt()) return;
+      await setRemoteState(asset.id, { remoteStatus: "failed", providerFileId: null, previewProviderFileId: null }).catch(() => undefined);
+      if (caught instanceof Error && caught.message === "ไม่สามารถสร้างภาพตัวอย่างจากวิดีโอนี้ได้") {
+        setError(caught.message);
+      } else if (!(caught instanceof Error && caught.message === "provider-upload-failed")) {
+        setError("อัปโหลดไป Google Drive ไม่สำเร็จ");
+      }
+    } finally {
+      if (isCurrentAttempt()) {
+        activeProviderAttempts.current.delete(asset.id);
+        setAttemptRevision((revision) => revision + 1);
+      }
     }
   }
 
@@ -242,7 +264,7 @@ export function MediaLibraryWorkspace({ blobStore }: { blobStore?: MediaBlobStor
           {tab === "all" && <>
             <button type="button" onClick={() => setPreview(asset)}>ดูตัวอย่าง</button>
             <button type="button" onClick={() => void editTags(asset)}>แก้แท็ก</button>
-            {(asset.remoteStatus === "failed" || asset.remoteStatus === "uploading") && <button type="button" onClick={() => void retryProviderUpload(asset)} aria-label={`ลองอัปโหลด ${asset.name} อีกครั้ง`}>ลองอีกครั้ง</button>}
+            {(asset.remoteStatus === "failed" || asset.remoteStatus === "uploading") && !activeProviderAttempts.current.has(asset.id) && <button type="button" onClick={() => void retryProviderUpload(asset)} aria-label={`ลองอัปโหลด ${asset.name} อีกครั้ง`}>ลองอีกครั้ง</button>}
             <button type="button" onClick={() => void trash(asset)} aria-label={`ย้าย ${asset.name} ไปถังขยะ`}>ถังขยะ</button>
           </>}
           {tab === "trash" && <button type="button" onClick={() => void restore(asset)} aria-label={`กู้คืน ${asset.name}`}>กู้คืน</button>}
