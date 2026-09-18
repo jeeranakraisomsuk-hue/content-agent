@@ -1,25 +1,29 @@
+"use client";
+
 import type { ReactNode } from "react";
 
-const navigationItems = [
-  { label: "ภาพรวมและเป้าหมาย", icon: "⌂" },
-  { label: "ปฏิทินคอนเทนต์", icon: "◫" },
-  { label: "Action Plan", icon: "✓" },
-  { label: "บอร์ดการผลิต", icon: "▦" },
-  { label: "งานที่ต้องแก้", icon: "↺" },
-  { label: "คลังสื่อ", icon: "▧" },
-  { label: "Reference และไอเดีย", icon: "✦" },
-  { label: "แม่แบบแคปชั่น", icon: "≡" },
-  { label: "ส่งโพสต์ผ่าน Make", icon: "↗" },
-  { label: "ตั้งค่าและข้อมูล", icon: "⚙" },
-];
+export const navigationItems = [
+  { id: "overview", label: "ภาพรวมและเป้าหมาย", icon: "⌂" },
+  { id: "calendar", label: "ปฏิทินคอนเทนต์", icon: "◫" },
+  { id: "action-plan", label: "Action Plan", icon: "✓" },
+  { id: "production-board", label: "บอร์ดการผลิต", icon: "▦" },
+  { id: "corrections", label: "งานที่ต้องแก้", icon: "↺" },
+  { id: "media-library", label: "คลังสื่อ", icon: "▧" },
+  { id: "references", label: "Reference และไอเดีย", icon: "✦" },
+  { id: "caption-templates", label: "แม่แบบแคปชั่น", icon: "≡" },
+  { id: "make-delivery", label: "ส่งโพสต์ผ่าน Make", icon: "↗" },
+  { id: "settings", label: "ตั้งค่าและข้อมูล", icon: "⚙" },
+] as const;
 
-export function AppShell({ children }: { children: ReactNode }) {
+export type WorkspaceItem = (typeof navigationItems)[number]["id"];
+
+export function AppShell({ children, activeItem = "overview", onNavigate }: { children: ReactNode; activeItem?: WorkspaceItem; onNavigate?: (item: WorkspaceItem) => void }) {
   return (
     <div className="app-shell">
       <nav aria-label="เมนูแดชบอร์ด">
         <div className="rail-brand" aria-label="INDY Content Studio">I</div>
-        {navigationItems.map(({ label, icon }) => (
-          <button key={label} type="button" className="rail-button" aria-label={label} data-tooltip={label}>
+        {navigationItems.map(({ id, label, icon }) => (
+          <button key={id} type="button" className="rail-button" aria-label={label} aria-current={activeItem === id ? "page" : undefined} data-tooltip={label} onClick={() => onNavigate?.(id)}>
             <span aria-hidden="true">{icon}</span>
             <span className="rail-label">{label}</span>
           </button>

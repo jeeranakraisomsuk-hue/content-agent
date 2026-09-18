@@ -32,4 +32,23 @@ describe("HomePage", () => {
     expect(within(drawer).getByText("พร้อมเผยแพร่")).toBeVisible();
     expect(within(drawer).getByText("2026-09-18T14:30")).toBeVisible();
   });
+
+  it("opens a clear deferred workspace when a rail destination has no existing surface", () => {
+    render(<HomePage />);
+
+    fireEvent.click(screen.getByRole("button", { name: "ปฏิทินคอนเทนต์" }));
+
+    expect(screen.getByRole("heading", { name: "ปฏิทินคอนเทนต์" })).toBeVisible();
+    expect(screen.getByText("กำลังจัดเตรียมพื้นที่งานนี้")).toBeVisible();
+    expect(screen.getByRole("button", { name: "ปฏิทินคอนเทนต์" })).toHaveAttribute("aria-current", "page");
+  });
+
+  it("shows the existing production board as its own workspace", () => {
+    render(<HomePage />);
+
+    fireEvent.click(screen.getByRole("button", { name: "บอร์ดการผลิต" }));
+
+    expect(screen.getByRole("heading", { name: "บอร์ดการผลิต" })).toBeVisible();
+    expect(screen.queryByRole("heading", { level: 1, name: "วันนี้" })).not.toBeInTheDocument();
+  });
 });
