@@ -1,8 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { AppShell, navigationItems, type WorkspaceItem } from "./AppShell";
-import { DashboardPreview } from "../features/dashboard/components/DashboardPreview";
+import { AppShell, type WorkspaceItem } from "./AppShell";
 import { TodayOverview, type TodayOverviewState } from "../features/dashboard/components/TodayOverview";
 import { CreateContentModal, type CreateContentInput } from "../features/dashboard/components/CreateContentModal";
 import { TaskDetailDrawer } from "../features/dashboard/components/TaskDetailDrawer";
@@ -21,22 +20,12 @@ import { OverviewWorkspace } from "../features/overview/components/OverviewWorks
 import { ContentCalendarWorkspace } from "../features/calendar/components/ContentCalendarWorkspace";
 import { ActionPlanWorkspace } from "../features/action-plan/components/ActionPlanWorkspace";
 import { ProductionBoardWorkspace } from "../features/production/components/ProductionBoardWorkspace";
-
-const initialTasks: DashboardTask[] = [
-  { id: "reels", title: "ตัดต่อคลิป Reels เทคนิคทรงผม", priority: "urgent", scheduledTime: "10:30", workflowStage: "ตัดต่อ", lastWorkedAt: "2026-09-18T10:18:00.000Z" },
-  { id: "caption", title: "ตรวจแคปชันคอร์สเดือนตุลาคม", priority: "high", scheduledTime: "13:00", workflowStage: "รออนุมัติ", lastWorkedAt: "2026-09-18T09:42:00.000Z" },
-  { id: "assets", title: "คัดภาพผลงานนักเรียน", priority: "normal", scheduledTime: "15:30", workflowStage: "เตรียมไฟล์", lastWorkedAt: "2026-09-17T16:30:00.000Z" },
-];
-
-const workspaceLabels = Object.fromEntries(navigationItems.map((item) => [item.id, item.label])) as Record<WorkspaceItem, string>;
-
-function DeferredWorkspace({ item }: { item: Exclude<WorkspaceItem, "overview" | "production-board"> }) {
-  return <section aria-labelledby="workspace-heading"><p className="eyebrow">WORKSPACE</p><h1 id="workspace-heading">{workspaceLabels[item]}</h1><p>กำลังจัดเตรียมพื้นที่งานนี้</p><p>เมนูนี้เปิดพื้นที่ทำงานได้แล้ว และจะแสดงข้อมูลเมื่อฟีเจอร์ส่วนนั้นพร้อมใช้งาน</p></section>;
-}
+import { CorrectionsWorkspace } from "../features/line-oa/components/CorrectionsWorkspace";
+import { MakeDeliveryWorkspace } from "../features/publication/components/MakeDeliveryWorkspace";
 
 function HomePageContent() {
   const dashboard = useDashboardData();
-  const [draftTasks, setDraftTasks] = useState<DashboardTask[]>(initialTasks);
+  const [draftTasks, setDraftTasks] = useState<DashboardTask[]>([]);
   const persistedTasks = useMemo(() => {
     if (!dashboard.state) return [];
     return dashboard.state.contents
@@ -85,7 +74,6 @@ function HomePageContent() {
         <TodayOverview tasks={todayTasks} state={todayState} onOpenTask={(task) => { setContinuationNotice(null); workspace.openTask(task.id); }} onResumeLatest={workspace.resumeLatest} onRetry={() => setTodayState("ready")} />
         <button type="button" className="create-task-button" onClick={() => workspace.setCreateOpen(true)}>สร้างชิ้นงานใหม่</button>
         {selectedTask ? <section className="selected-workflow" aria-label={`ทำงานต่อกับ ${selectedTask.title}`}><p className="eyebrow">กำลังทำงานต่อ</p><h2>{selectedTask.title}</h2><p>ขั้นตอนปัจจุบัน: {selectedTask.workflowStage}</p><button type="button" className="continue-work-button" onClick={continueSelectedTask}>ดำเนินงานต่อที่ขั้นตอน {selectedTask.workflowStage}</button>{continuationNotice && <p className="continuation-notice" role="status">{continuationNotice}</p>}</section> : <p className="selected-workflow-hint" aria-live="polite">เลือกงานเพื่อเปิดขั้นตอนการทำงาน</p>}
-        <DashboardPreview />
         <OverviewWorkspace />
         <button type="button" className="create-task-button" onClick={() => setFullEditorOpen(true)}>เปิดตัวแก้ไขคอนเทนต์เต็ม</button>
         <ContentEditorDialog mode={selectedTask ? "edit" : "create"} contentId={selectedTask?.id} open={isFullEditorOpen} onClose={() => setFullEditorOpen(false)} />
@@ -105,7 +93,8 @@ function HomePageContent() {
       {activeWorkspace === "caption-templates" && <CaptionTemplatesWorkspace />}
       {activeWorkspace === "calendar" && <ContentCalendarWorkspace />}
       {activeWorkspace === "action-plan" && <ActionPlanWorkspace />}
-      {activeWorkspace !== "overview" && activeWorkspace !== "production-board" && activeWorkspace !== "settings" && activeWorkspace !== "media-library" && activeWorkspace !== "references" && activeWorkspace !== "caption-templates" && activeWorkspace !== "calendar" && activeWorkspace !== "action-plan" && <DeferredWorkspace item={activeWorkspace} />}
+      {activeWorkspace === "corrections" && <CorrectionsWorkspace />}
+      {activeWorkspace === "make-delivery" && <MakeDeliveryWorkspace />}
     </main>
   </AppShell>;
 }

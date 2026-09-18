@@ -190,6 +190,37 @@ button:disabled { opacity: .5; cursor: not-allowed; }
 .settings-dialog-actions button:first-child { background: rgba(255,255,255,.58); color: var(--ink); }
 @media (max-width: 760px) { .settings-grid { grid-template-columns: 1fr; } .workspace-heading-row { display: grid; } }
 
+.overview-workspace, .calendar-workspace, .action-plan-workspace, .production-workspace, .corrections-workspace, .make-delivery-workspace { display: grid; gap: 18px; }
+.overview-metrics, .action-plan-grid, .production-board-grid, .calendar-grid { display: grid; gap: 10px; }
+.overview-metrics { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+.metric-card { display: grid; gap: 4px; margin: 0; padding: 14px; }
+.metric-card strong { font-size: 24px; }
+.overview-search, .production-filters { display: flex; flex-wrap: wrap; gap: 8px; align-items: end; }
+.overview-search label, .production-filters label, .production-status-control, .settings-panel label { display: grid; gap: 5px; font-size: 12px; font-weight: 700; }
+.overview-search input, .production-filters input, .production-filters select, .production-status-control select, .calendar-workspace input, .action-plan-workspace input, .corrections-workspace input, .corrections-workspace select, .make-delivery-workspace input, .make-delivery-workspace select { padding: 8px 10px; border: 1px solid rgba(45,42,39,.16); border-radius: 10px; background: rgba(255,255,255,.68); }
+.overview-results, .action-plan-grid, .production-board-grid { grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); }
+.overview-result, .action-plan-day, .production-column { margin: 0; padding: 13px; }
+.overview-result h3, .production-column h2 { margin: 0; }
+.calendar-grid { grid-template-columns: repeat(7, minmax(0, 1fr)); }
+.calendar-cell { min-height: 110px; margin: 0; padding: 8px; }
+.calendar-cell.muted { opacity: .5; }
+.calendar-cell article { display: grid; min-width: 0; margin: 5px 0 0; padding: 6px; font-size: 11px; }
+.calendar-cell article button { padding: 4px; border: 0; border-radius: 7px; background: rgba(135,156,129,.18); color: var(--focus); cursor: pointer; font-size: 10px; }
+.production-column { display: grid; align-content: start; gap: 8px; min-width: 0; }
+.production-column-heading { display: flex; justify-content: space-between; gap: 8px; align-items: center; }
+.production-column-heading span { padding: 3px 7px; border-radius: 999px; background: rgba(135,156,129,.18); color: var(--focus); font-size: 12px; }
+.production-card-list { display: grid; gap: 8px; }
+.production-card { display: grid; gap: 10px; min-width: 0; margin: 0; padding: 12px; }
+.production-card h3 { margin: 0; font-size: 14px; }
+.production-card p, .production-card small { margin: 4px 0 0; color: rgba(45,42,39,.64); font-size: 12px; }
+.empty-state { padding: 14px; border-radius: 14px; background: rgba(255,255,255,.36); color: rgba(45,42,39,.64); }
+.corrections-workspace ul, .make-delivery-workspace ul { display: grid; gap: 8px; margin: 0; padding: 0; list-style: none; }
+.corrections-workspace li, .make-delivery-workspace li { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px; padding: 12px; border-radius: 14px; background: rgba(255,255,255,.4); }
+.make-delivery-workspace li span { color: rgba(45,42,39,.68); font-size: 12px; }
+.make-delivery-workspace li button, .corrections-workspace li button { padding: 7px 10px; border: 0; border-radius: 9px; background: rgba(135,156,129,.2); color: var(--focus); cursor: pointer; font-weight: 700; }
+.settings-panel input[type="file"] { padding: 7px; }
+@media (max-width: 760px) { .overview-metrics { grid-template-columns: repeat(2, minmax(0, 1fr)); } .calendar-grid { overflow-x: auto; grid-template-columns: repeat(7, minmax(110px, 1fr)); } .production-board-grid { overflow-x: auto; grid-template-columns: repeat(7, minmax(170px, 1fr)); } }
+
 .media-library-workspace { display: grid; gap: 18px; }
 .media-actions { display: flex; flex-wrap: wrap; gap: 8px; justify-content: end; }
 .media-actions button, .media-upload-button { display: inline-flex; align-items: center; gap: 6px; padding: 9px 12px; border: 0; border-radius: 12px; background: var(--ink); color: #fffdfa; cursor: pointer; font-size: 13px; font-weight: 700; }

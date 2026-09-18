@@ -2,14 +2,22 @@ import { fireEvent, render, screen, within } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
 import { HomePage } from "../app/home-page-view";
 import { MemoryDashboardRepository } from "../features/data/memory-dashboard-repository";
+import { createEmptyDashboardState } from "../features/domain/create-empty-state";
+import type { ContentItem } from "../features/domain/types";
+
+function seededRepository() {
+  const now = "2026-09-18T10:00:00.000Z";
+  const content: ContentItem = { id: "reels", title: "ตัดต่อคลิป Reels เทคนิคทรงผม", categoryId: "category-knowledge", formatId: "format-video", owner: "ทีมคอนเทนต์", objective: "awareness", priority: "urgent", plannedWorkAt: "10:30", lastWorkedAt: now, readyDate: null, productionStatus: "editing", assetIds: [], processSteps: [], caption: "", captionSource: null, schedules: [], referenceIds: [], notes: "", localApproval: "pending", lineReview: { status: "not-sent", activeCycleId: null, reviewCode: null, providerReceipts: [], lastEventAt: null, history: [] }, createdAt: now, updatedAt: now, deletedAt: null };
+  return new MemoryDashboardRepository({ ...createEmptyDashboardState(), contents: [content] });
+}
 
 describe("HomePage", () => {
-  it("keeps Today as the only page heading and exposes the selected task continuation", () => {
-    render(<HomePage repository={new MemoryDashboardRepository()} />);
+  it("keeps Today as the only page heading and exposes the selected task continuation", async () => {
+    render(<HomePage repository={seededRepository()} />);
 
     expect(screen.getAllByRole("heading", { level: 1 })).toHaveLength(1);
 
-    fireEvent.click(screen.getByRole("button", { name: /ตัดต่อคลิป Reels เทคนิคทรงผม/ }));
+    fireEvent.click(await screen.findByRole("button", { name: /ตัดต่อคลิป Reels เทคนิคทรงผม/ }));
 
     expect(screen.getByRole("region", { name: "ทำงานต่อกับ ตัดต่อคลิป Reels เทคนิคทรงผม" })).toBeVisible();
     expect(screen.getByText("ขั้นตอนปัจจุบัน: ตัดต่อ")).toBeVisible();

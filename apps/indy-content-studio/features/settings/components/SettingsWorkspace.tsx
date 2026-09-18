@@ -4,6 +4,8 @@ import { useMemo, useState } from "react";
 import { useDashboardData } from "../../data/DashboardDataProvider";
 import { addCategory, addFormat, deleteCategory, deleteFormat, renameCategory, renameFormat, setCategoryApprovalRequired, setMonthlyGoal } from "../settings-commands";
 import type { FormatDefinition, IntegrationStatus, Platform } from "../../domain/types";
+import { DataManagementPanel } from "../../backup/components/DataManagementPanel";
+import { ContentTrashPanel } from "../../content/components/ContentTrashPanel";
 
 type Notice = { kind: "success" | "error"; message: string } | null;
 const platforms: Platform[] = ["facebook", "instagram", "tiktok"];
@@ -64,6 +66,8 @@ export function SettingsWorkspace() {
       <section className="settings-panel" aria-labelledby="goals-heading"><p className="panel-label">PLANNING</p><h2 id="goals-heading">เป้าหมายรายเดือน</h2><p className="settings-meta">เดือนปัจจุบัน {currentMonth}</p><label>เป้าหมายเดือนนี้<input type="number" min="0" value={goal || savedGoal?.toString() || ""} onChange={(event) => setGoal(event.target.value)} /></label><button type="button" onClick={() => void mutate((current) => setMonthlyGoal(current, currentMonth, Number(goal || savedGoal || 0)), "บันทึกเป้าหมายแล้ว")}>บันทึกเป้าหมาย</button></section>
       <section className="settings-panel" aria-labelledby="health-heading"><div className="settings-panel-heading"><div><p className="panel-label">CONNECTIONS</p><h2 id="health-heading">การเชื่อมต่อ</h2></div><button type="button" onClick={refreshHealth} disabled={healthLoading}>{healthLoading ? "กำลังตรวจ…" : "ตรวจการเชื่อมต่อ"}</button></div><div className="settings-list">{(health ?? state.integrations).map((integration) => <article key={integration.provider} className="settings-item"><div className="settings-item-main"><strong>{providerLabels[integration.provider]}</strong><span className="settings-meta">{integration.message}</span></div><span className={`health-dot ${integration.status}`}>{integration.status}</span></article>)}</div></section>
     </div>
+    <DataManagementPanel />
+    <ContentTrashPanel />
     {categoryDialog && <div className="settings-dialog-backdrop"><section className="settings-dialog" role="dialog" aria-modal="true" aria-labelledby="category-dialog-heading"><h2 id="category-dialog-heading">เพิ่มหมวดคอนเทนต์</h2><label>ชื่อหมวด<input autoFocus aria-label="ชื่อหมวด" value={categoryName} onChange={(event) => setCategoryName(event.target.value)} /></label><div className="settings-dialog-actions"><button type="button" onClick={() => setCategoryDialog(false)}>ยกเลิก</button><button type="button" onClick={saveCategory}>บันทึกหมวด</button></div></section></div>}
     {formatDialog && <div className="settings-dialog-backdrop"><section className="settings-dialog" role="dialog" aria-modal="true" aria-labelledby="format-dialog-heading"><h2 id="format-dialog-heading">เพิ่มรูปแบบ</h2><label>ชื่อรูปแบบ<input autoFocus aria-label="ชื่อรูปแบบ" value={formatName} onChange={(event) => setFormatName(event.target.value)} /></label><label>ชนิดสื่อ<select aria-label="ชนิดสื่อ" value={formatKind} onChange={(event) => setFormatKind(event.target.value as FormatDefinition["mediaKind"])}><option value="image">ภาพ</option><option value="video">วิดีโอ</option><option value="other">อื่น ๆ</option></select></label><div className="settings-dialog-actions"><button type="button" onClick={() => setFormatDialog(false)}>ยกเลิก</button><button type="button" onClick={saveFormat}>บันทึกรูปแบบ</button></div></section></div>}
   </section>;
