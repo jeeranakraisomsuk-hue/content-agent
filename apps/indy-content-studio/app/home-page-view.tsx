@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { AppShell, type WorkspaceItem } from "./AppShell";
 import { TodayOverview, type TodayOverviewState } from "../features/dashboard/components/TodayOverview";
 import { CreateContentModal, type CreateContentInput } from "../features/dashboard/components/CreateContentModal";
@@ -23,6 +23,19 @@ import { ProductionBoardWorkspace } from "../features/production/components/Prod
 import { CorrectionsWorkspace } from "../features/line-oa/components/CorrectionsWorkspace";
 import { MakeDeliveryWorkspace } from "../features/publication/components/MakeDeliveryWorkspace";
 
+type LineConnectionView = {
+  view: "loading" | "authenticated" | "unauthenticated" | "error";
+  status: string | null;
+  maskedRecipient: string | null;
+};
+
+type LineDeliveryResult = {
+  id: string;
+  status: "sent" | "failed";
+  errorCategory: string | null;
+  sentAt: string | null;
+};
+
 function HomePageContent() {
   const dashboard = useDashboardData();
   const [draftTasks, setDraftTasks] = useState<DashboardTask[]>([]);
@@ -42,7 +55,37 @@ function HomePageContent() {
   const [continuationNotice, setContinuationNotice] = useState<string | null>(null);
   const [isLineConfirmationOpen, setLineConfirmationOpen] = useState(false);
   const [isFullEditorOpen, setFullEditorOpen] = useState(false);
+  const [lineConnection, setLineConnection] = useState<LineConnectionView>({ view: "loading", status: null, maskedRecipient: null });
   const selectedTask = todayTasks.find((task) => task.id === workspace.selectedTaskId);
+  const selectedContent = dashboard.state?.contents.find((content) => content.id === selectedTask?.id && !content.deletedAt) ?? null;
+  const lineConnected = lineConnection.view === "authenticated" && lineConnection.status === "connected";
+  const drawerConnectionStatus = lineConnection.view === "authenticated"
+    ? lineConnected ? "connected" : lineConnection.status === "disabled" ? "disabled" : "not_connected"
+    : lineConnection.view;
+
+  useEffect(() => {
+    if (activeWorkspace !== "overview") return;
+    let active = true;
+    setLineConnection({ view: "loading", status: null, maskedRecipient: null });
+    void fetch("/api/line/pairing", { cache: "no-store" })
+      .then(async (response) => {
+        if (response.status === 401) {
+          if (active) setLineConnection({ view: "unauthenticated", status: null, maskedRecipient: null });
+          return;
+        }
+        if (!response.ok) throw new Error("LINE status unavailable");
+        const result = await response.json() as { status?: unknown; maskedRecipient?: unknown };
+        if (active) setLineConnection({
+          view: "authenticated",
+          status: typeof result.status === "string" ? result.status : "not_connected",
+          maskedRecipient: typeof result.maskedRecipient === "string" ? result.maskedRecipient : null,
+        });
+      })
+      .catch(() => {
+        if (active) setLineConnection({ view: "error", status: null, maskedRecipient: null });
+      });
+    return () => { active = false; };
+  }, [activeWorkspace]);
 
   function continueSelectedTask() {
     if (selectedTask) setContinuationNotice(`พร้อมทำงานต่อที่ขั้นตอน ${selectedTask.workflowStage}`);
@@ -77,13 +120,35 @@ function HomePageContent() {
         <OverviewWorkspace />
         <button type="button" className="create-task-button" onClick={() => setFullEditorOpen(true)}>เปิดตัวแก้ไขคอนเทนต์เต็ม</button>
         <ContentEditorDialog mode={selectedTask ? "edit" : "create"} contentId={selectedTask?.id} open={isFullEditorOpen} onClose={() => setFullEditorOpen(false)} />
-        <TaskDetailDrawer task={selectedTask ?? null} onClose={() => { setLineConfirmationOpen(false); workspace.closeTask(); }} onRequestSend={() => setLineConfirmationOpen(true)} />
-        <LineSendConfirmation task={selectedTask ?? null} open={isLineConfirmationOpen} onCancel={() => setLineConfirmationOpen(false)} onConfirm={async () => {
-          if (!selectedTask) return;
-          const sentTask = { ...selectedTask, lineDeliveryStatus: "sent" as const, lineDeliveryReceipt: "ส่งถึง PRIK GN แล้ว" };
-          setDraftTasks((current) => current.map((task) => task.id === sentTask.id ? sentTask : task));
-          await saveTask(sentTask);
-        }} />
+        <TaskDetailDrawer task={selectedTask ?? null} connectionStatus={drawerConnectionStatus} authenticatedAdmin={lineConnection.view === "authenticated"} onClose={() => { setLineConfirmationOpen(false); workspace.closeTask(); }} onRequestSend={() => setLineConfirmationOpen(true)} />
+        <LineSendConfirmation
+          task={selectedTask ?? null}
+          open={isLineConfirmationOpen}
+          connectedRecipient={lineConnected}
+          authenticatedAdmin={lineConnection.view === "authenticated"}
+          recipientMasked={lineConnection.maskedRecipient}
+          expectedUpdatedAt={selectedContent?.updatedAt ?? null}
+          onCancel={() => setLineConfirmationOpen(false)}
+          onConfirm={async (): Promise<LineDeliveryResult> => {
+            if (!selectedContent) return { id: "", status: "failed", errorCategory: "stale_content", sentAt: null };
+            let response: Response;
+            try {
+              response = await fetch("/api/line/send", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ contentId: selectedContent.id, expectedUpdatedAt: selectedContent.updatedAt }),
+              });
+            } catch {
+              return { id: "", status: "failed", errorCategory: "provider", sentAt: null };
+            }
+            let payload: { delivery?: LineDeliveryResult; error?: string } = {};
+            try { payload = await response.json() as typeof payload; } catch { /* keep the public error generic */ }
+            if (!response.ok || !payload.delivery) {
+              return { id: "", status: "failed", errorCategory: payload.error ?? "provider", sentAt: null };
+            }
+            return payload.delivery;
+          }}
+        />
         <CreateContentModal open={workspace.isCreateOpen} onClose={() => workspace.setCreateOpen(false)} onCreate={createTask} />
       </>}
       {activeWorkspace === "production-board" && <ProductionBoardWorkspace />}

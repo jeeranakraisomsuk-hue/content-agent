@@ -11,10 +11,13 @@ export interface ContentAsset {
   name: string;
   type: string;
   size: number;
+  remoteReady?: boolean;
+  previewReady?: boolean;
 }
 
 export interface DashboardTask {
   id: string;
+  updatedAt?: string;
   title: string;
   priority: TaskPriority;
   scheduledTime: string;
@@ -28,8 +31,6 @@ export interface DashboardTask {
   caption?: string;
   notes?: string;
   assets?: ContentAsset[];
-  lineDeliveryStatus?: "sent";
-  lineDeliveryReceipt?: string;
 }
 
 const workflowStageByStatus: Record<ProductionStatus, string> = {
@@ -110,16 +111,7 @@ export function dashboardTaskToContent(
   const plannedWorkAt = task.scheduledTime && task.scheduledTime !== "ยังไม่กำหนด"
     ? task.scheduledTime
     : null;
-  const lineReview = task.lineDeliveryStatus === "sent"
-    ? {
-        status: "sent" as const,
-        activeCycleId: null,
-        reviewCode: null,
-        providerReceipts: task.lineDeliveryReceipt ? [task.lineDeliveryReceipt] : [],
-        lastEventAt: now,
-        history: [],
-      }
-    : {
+  const lineReview = state.contents.find((content) => content.id === task.id)?.lineReview ?? {
         status: "not-sent" as const,
         activeCycleId: null,
         reviewCode: null,
@@ -159,11 +151,17 @@ export function dashboardTaskFromContent(content: ContentItem, state: DashboardS
   const assets = content.assetIds
     .map((assetId) => state.media.find((asset) => asset.id === assetId))
     .filter((asset): asset is MediaAsset => Boolean(asset && !asset.deletedAt))
-    .map((asset) => ({ name: asset.name, type: asset.mimeType, size: asset.size }));
-  const lineSent = content.lineReview.status === "sent" || content.lineReview.status === "approved";
+    .map((asset) => ({
+      name: asset.name,
+      type: asset.mimeType,
+      size: asset.size,
+      remoteReady: asset.remoteStatus === "ready" && Boolean(asset.providerFileId),
+      previewReady: asset.mimeType !== "video/mp4" || Boolean(asset.previewProviderFileId),
+    }));
 
   return {
     id: content.id,
+    updatedAt: content.updatedAt,
     title: content.title,
     priority: content.priority,
     scheduledTime: content.plannedWorkAt ?? "ยังไม่กำหนด",
@@ -177,10 +175,6 @@ export function dashboardTaskFromContent(content: ContentItem, state: DashboardS
     caption: content.caption,
     notes: content.notes,
     assets,
-    ...(lineSent ? {
-      lineDeliveryStatus: "sent" as const,
-      lineDeliveryReceipt: content.lineReview.providerReceipts.join(", ") || "ส่งผ่าน LINE แล้ว",
-    } : {}),
   };
 }
 

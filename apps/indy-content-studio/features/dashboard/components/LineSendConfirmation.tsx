@@ -2,34 +2,70 @@
 
 import { useEffect, useState } from "react";
 import { canSendToLine } from "../../content/send-eligibility";
-import type { AssetState } from "../../content/send-eligibility";
 import type { DashboardTask } from "../dashboard-model";
+
+type SendState = "ready" | "pending" | "success" | "error";
+
+export interface LineDeliveryResult {
+  id: string;
+  status: "sent" | "failed";
+  errorCategory: string | null;
+  sentAt: string | null;
+}
+
+const safeErrorLabels: Record<string, string> = {
+  configuration: "ตั้งค่า LINE ไม่พร้อม",
+  recipient: "ผู้รับ LINE ยังไม่พร้อม",
+  quota: "โควตาการส่ง LINE เต็ม",
+  media_fetch: "LINE เปิดไฟล์สื่อไม่ได้",
+  timeout: "การส่งหมดเวลา ลองใหม่ได้",
+  provider: "บริการ LINE ขัดข้อง ลองใหม่ได้",
+  stale_content: "ข้อมูลชิ้นงานเปลี่ยนแล้ว กรุณาปิดและเปิดหน้าต่างนี้ใหม่",
+  caption_required: "ต้องมีแคปชันก่อนส่ง",
+  asset_not_ready: "ไฟล์ยังอัปโหลดไปยัง Google Drive ไม่เสร็จ",
+  preview_missing: "วิดีโอยังไม่มีภาพตัวอย่าง",
+};
+
+function sendAssetFor(task: DashboardTask) {
+  return task.assets?.find((asset) => asset.remoteReady) ?? null;
+}
 
 interface LineSendConfirmationProps {
   task: DashboardTask | null;
   open: boolean;
   onCancel: () => void;
-  onConfirm: () => Promise<void>;
+  onConfirm: () => Promise<LineDeliveryResult>;
+  connectedRecipient: boolean;
+  authenticatedAdmin: boolean;
+  recipientMasked: string | null;
+  expectedUpdatedAt: string | null;
 }
 
-type SendState = "ready" | "pending" | "success" | "error";
-
-function assetStateFor(task: DashboardTask): AssetState {
-  return task.assets?.length ? "ready" : "missing";
-}
-
-export function LineSendConfirmation({ task, open, onCancel, onConfirm }: LineSendConfirmationProps) {
+export function LineSendConfirmation({ task, open, onCancel, onConfirm, connectedRecipient, authenticatedAdmin, recipientMasked, expectedUpdatedAt }: LineSendConfirmationProps) {
   const [sendState, setSendState] = useState<SendState>("ready");
+  const [delivery, setDelivery] = useState<LineDeliveryResult | null>(null);
+  const [errorCategory, setErrorCategory] = useState("provider");
 
   useEffect(() => {
     setSendState("ready");
+    setDelivery(null);
+    setErrorCategory("provider");
   }, [open, task?.id]);
 
-  if (!open || !task || !canSendToLine({ assetState: assetStateFor(task), caption: task.caption ?? "" })) {
+  const selectedAsset = task ? sendAssetFor(task) : null;
+  const canSend = task && canSendToLine({
+    assetState: selectedAsset ? "ready" : task.assets?.length ? "uploading" : "missing",
+    caption: task.caption ?? "",
+    connectedRecipient,
+    authenticatedAdmin,
+    isSending: false,
+    assetType: selectedAsset?.type,
+    previewReady: selectedAsset?.previewReady ?? false,
+  });
+  if (!open || !task || !selectedAsset || !expectedUpdatedAt || !canSend) {
     return null;
   }
 
-  const selectedAsset = task.assets![0];
   const isPending = sendState === "pending";
 
   async function submit() {
@@ -37,9 +73,16 @@ export function LineSendConfirmation({ task, open, onCancel, onConfirm }: LineSe
 
     setSendState("pending");
     try {
-      await onConfirm();
-      setSendState("success");
+      const result = await onConfirm();
+      if (result.status === "sent" && result.id) {
+        setDelivery(result);
+        setSendState("success");
+      } else {
+        setErrorCategory(result.errorCategory ?? "provider");
+        setSendState("error");
+      }
     } catch {
+      setErrorCategory("provider");
       setSendState("error");
     }
   }
@@ -53,7 +96,9 @@ export function LineSendConfirmation({ task, open, onCancel, onConfirm }: LineSe
         {sendState === "success" ? (
           <div className="line-send-receipt" role="status">
             <strong>ส่งเข้า LINE OA เรียบร้อยแล้ว</strong>
-            <span>ส่งไฟล์ {selectedAsset.name} ถึง PRIK GN แล้ว</span>
+            <span>ไฟล์: {selectedAsset.name}</span>
+            <span>Delivery ID: {delivery?.id}</span>
+            <span>เวลาส่ง: {delivery?.sentAt ? new Date(delivery.sentAt).toLocaleString("th-TH") : "ไม่พบเวลาจากเซิร์ฟเวอร์"}</span>
           </div>
         ) : (
           <>
@@ -68,8 +113,8 @@ export function LineSendConfirmation({ task, open, onCancel, onConfirm }: LineSe
               <span className="panel-label">ตัวอย่างแคปชัน</span>
               <p>{task.caption}</p>
             </div>
-            <div className="line-recipient"><span>ผู้รับ</span><strong>PRIK GN</strong></div>
-            {sendState === "error" && <p className="line-send-error" role="alert">ส่งไม่สำเร็จ กรุณาตรวจสอบการเชื่อมต่อแล้วลองส่งอีกครั้ง</p>}
+            <div className="line-recipient"><span>ผู้รับที่จับคู่ไว้</span><strong>{recipientMasked}</strong></div>
+            {sendState === "error" && <p className="line-send-error" role="alert">ส่งไม่สำเร็จ: {safeErrorLabels[errorCategory] ?? "บริการขัดข้อง ลองใหม่ได้"} <span>({errorCategory})</span></p>}
           </>
         )}
 

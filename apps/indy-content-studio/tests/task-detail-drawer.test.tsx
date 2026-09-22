@@ -15,15 +15,16 @@ const task: DashboardTask = {
   objective: "เพิ่มยอดเข้าชม",
   caption: "แคปชันตัวอย่าง",
   notes: "ใช้ฉบับที่อนุมัติแล้ว",
-  assets: [{ name: "review-reels.mp4", type: "video/mp4", size: 5 }],
+  assets: [{ name: "review-reels.mp4", type: "video/mp4", size: 5, remoteReady: true, previewReady: true }],
 };
+const connectionProps = { connectionStatus: "connected" as const, authenticatedAdmin: true };
 
 describe("TaskDetailDrawer", () => {
   it("keeps the selected task workflow available in an accessible detail dialog", () => {
     const close = vi.fn();
     const requestSend = vi.fn();
 
-    render(<TaskDetailDrawer task={task} onClose={close} onRequestSend={requestSend} />);
+    render(<TaskDetailDrawer {...connectionProps} task={task} onClose={close} onRequestSend={requestSend} />);
 
     const drawer = screen.getByRole("dialog", { name: "รายละเอียด ตัดต่อคลิป Reels" });
     expect(drawer).toBeVisible();
@@ -42,7 +43,7 @@ describe("TaskDetailDrawer", () => {
   });
 
   it("does not render without a selected task", () => {
-    render(<TaskDetailDrawer task={null} onClose={vi.fn()} onRequestSend={vi.fn()} />);
+    render(<TaskDetailDrawer {...connectionProps} task={null} onClose={vi.fn()} onRequestSend={vi.fn()} />);
 
     expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
   });
@@ -50,7 +51,7 @@ describe("TaskDetailDrawer", () => {
   it("keeps LINE delivery disabled and cannot request confirmation when the saved task is ineligible", () => {
     const requestSend = vi.fn();
 
-    render(<TaskDetailDrawer task={{ ...task, assets: [], caption: "" }} onClose={vi.fn()} onRequestSend={requestSend} />);
+    render(<TaskDetailDrawer {...connectionProps} task={{ ...task, assets: [], caption: "" }} onClose={vi.fn()} onRequestSend={requestSend} />);
 
     const send = screen.getByRole("button", { name: "ส่งเข้า LINE OA" });
     expect(send).toBeDisabled();
@@ -58,16 +59,18 @@ describe("TaskDetailDrawer", () => {
     expect(requestSend).not.toHaveBeenCalled();
   });
 
-  it("keeps a completed LINE delivery receipt in the saved task workflow", () => {
+  it("disables the LINE send action until the recipient is paired", () => {
     render(
       <TaskDetailDrawer
-        task={{ ...task, lineDeliveryStatus: "sent", lineDeliveryReceipt: "ส่งถึง PRIK GN แล้ว" }}
+        {...connectionProps}
+        connectionStatus="not_connected"
+        task={task}
         onClose={vi.fn()}
         onRequestSend={vi.fn()}
       />,
     );
 
-    expect(screen.getByText("ส่งแล้ว")).toBeVisible();
-    expect(screen.getByText("ส่งถึง PRIK GN แล้ว")).toBeVisible();
+    expect(screen.getByRole("button", { name: "ส่งเข้า LINE OA" })).toBeDisabled();
+    expect(screen.getByText(/จับคู่ LINE OA/)).toBeVisible();
   });
 });
