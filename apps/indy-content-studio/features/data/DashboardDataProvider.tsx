@@ -10,7 +10,7 @@ import {
   useState,
   type ReactNode,
 } from "react";
-import { IndexedDbDashboardRepository } from "./indexeddb-dashboard-repository";
+import { ApiDashboardRepository } from "./api-dashboard-repository";
 import type { DashboardRepository } from "./dashboard-repository";
 import { cloneDashboardState } from "./dashboard-repository";
 import type { DashboardState } from "../domain/types";
@@ -35,7 +35,7 @@ export function DashboardDataProvider({
   children: ReactNode;
   repository?: DashboardRepository;
 }) {
-  const defaultRepository = useMemo(() => new IndexedDbDashboardRepository(), []);
+  const defaultRepository = useMemo(() => new ApiDashboardRepository(), []);
   const activeRepository = repository ?? defaultRepository;
   const [state, setState] = useState<DashboardState | null>(null);
   const [status, setStatus] = useState<DashboardLoadStatus>("loading");
