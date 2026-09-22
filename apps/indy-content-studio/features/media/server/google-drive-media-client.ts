@@ -14,7 +14,7 @@ export interface GoogleDriveMediaClient {
   }): Promise<{ fileId: string }>;
   deleteFile(input: { fileId: string }): Promise<void>;
   streamFile(input: { fileId: string; range?: string }): Promise<Response>;
-  probeStorage?(): Promise<"connected" | "auth" | "folder_not_found" | "storage_permission" | "quota">;
+  probeStorage?(options?: { signal?: AbortSignal }): Promise<"connected" | "auth" | "folder_not_found" | "storage_permission" | "quota">;
 }
 
 type GoogleDriveMediaClientOptions = {
@@ -192,12 +192,12 @@ export function createGoogleDriveMediaClient({
       return response;
     },
 
-    async probeStorage() {
+    async probeStorage({ signal } = {}) {
       try {
         const accessToken = resolveAccessToken(await authClient.getAccessToken());
         const response = await fetcher(
           `https://www.googleapis.com/drive/v3/files/${encodeURIComponent(folderId)}?fields=id,mimeType,capabilities(canAddChildren)&supportsAllDrives=true`,
-          { headers: { Authorization: `Bearer ${accessToken}` } },
+          { headers: { Authorization: `Bearer ${accessToken}` }, signal },
         );
         if (response.status === 404) return "folder_not_found";
         if (response.status === 401) return "auth";

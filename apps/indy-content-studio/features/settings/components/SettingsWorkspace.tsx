@@ -10,7 +10,7 @@ import { ContentTrashPanel } from "../../content/components/ContentTrashPanel";
 type Notice = { kind: "success" | "error"; message: string } | null;
 const platforms: Platform[] = ["facebook", "instagram", "tiktok"];
 const providerLabels: Record<IntegrationStatus["provider"], string> = {
-  "google-sheets": "Google Sheets", "google-drive": "Google Drive", line: "LINE OA", make: "Make", tiktok: "TikTok", "online-media": "Online Media", "ai-caption": "AI Caption",
+  database: "Database", "google-sheets": "Google Sheets", "google-drive": "Google Drive", line: "LINE OA", make: "Make", tiktok: "TikTok", "online-media": "Online Media", "ai-caption": "AI Caption",
 };
 
 function nextId(prefix: string) { return `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`; }

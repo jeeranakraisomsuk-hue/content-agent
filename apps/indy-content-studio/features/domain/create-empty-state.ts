@@ -27,6 +27,7 @@ function createFormats(): FormatDefinition[] {
 
 function createIntegrations(): IntegrationStatus[] {
   return [
+    "database",
     "google-sheets",
     "google-drive",
     "line",

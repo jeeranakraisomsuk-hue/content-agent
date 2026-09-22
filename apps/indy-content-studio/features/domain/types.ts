@@ -163,7 +163,7 @@ export interface PublicationAttempt {
 }
 
 export interface IntegrationStatus {
-  provider: "google-sheets" | "google-drive" | "line" | "make" | "tiktok" | "online-media" | "ai-caption";
+  provider: "database" | "google-sheets" | "google-drive" | "line" | "make" | "tiktok" | "online-media" | "ai-caption";
   status: "connected" | "disconnected" | "error";
   checkedAt: string | null;
   message: string;
