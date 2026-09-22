@@ -35,5 +35,5 @@ export function buildLineMessages({
     ? { type: "image" as const, originalContentUrl: media.originalUrl, previewImageUrl: media.previewUrl }
     : { type: "video" as const, originalContentUrl: media.originalUrl, previewImageUrl: media.previewUrl };
 
-  return [visual, { type: "text", text: caption }];
+  return caption.trim() ? [visual, { type: "text", text: caption }] : [visual];
 }

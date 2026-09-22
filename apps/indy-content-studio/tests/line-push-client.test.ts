@@ -39,6 +39,6 @@ describe("pushLineMessages", () => {
         retryKey: "same-content-revision",
         messages: [{ type: "text", text: "พร้อมโพสต์" }],
       }),
-    ).rejects.toThrow("LINE configuration rejected the request");
+    ).rejects.toMatchObject({ category: "configuration" });
   });
 });
