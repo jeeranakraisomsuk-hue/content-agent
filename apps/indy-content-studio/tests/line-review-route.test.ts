@@ -3,13 +3,42 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { POST as sendReview } from "../app/api/line/send-review/route";
 import { GET as listReviews } from "../app/api/line/reviews/route";
 import { POST as webhook } from "../app/api/line/webhook/route";
-import { clearLineReviewStore, registerLineReview } from "../features/line-oa/server/line-review-store";
+
+const reviewStore = vi.hoisted(() => {
+  const records = new Map<string, any>();
+  return {
+    reset: () => records.clear(),
+    register: async (review: any) => {
+      const existing = records.get(review.reviewCode);
+      if (existing) return existing;
+      const stored = { ...review, events: [], handledWebhookEventIds: [] };
+      records.set(review.reviewCode, stored);
+      return stored;
+    },
+    get: async (code: string) => records.get(code) ?? null,
+    append: async (code: string, event: any, webhookEventId?: string) => {
+      const stored = records.get(code);
+      if (!stored || (webhookEventId && stored.handledWebhookEventIds.includes(webhookEventId))) return stored ?? null;
+      if (webhookEventId) stored.handledWebhookEventIds.push(webhookEventId);
+      if (!stored.events.some((item: any) => item.id === event.id)) stored.events.push(event);
+      return stored;
+    },
+    list: async () => [...records.values()],
+  };
+});
+
+vi.mock("../features/line-oa/server/line-review-store", () => ({
+  registerLineReview: reviewStore.register,
+  getLineReview: reviewStore.get,
+  appendLineReviewEvent: reviewStore.append,
+  listLineReviews: reviewStore.list,
+}));
 
 const originalToken = process.env.LINE_CHANNEL_ACCESS_TOKEN;
 const originalSecret = process.env.LINE_CHANNEL_SECRET;
 
 afterEach(() => {
-  clearLineReviewStore();
+  reviewStore.reset();
   process.env.LINE_CHANNEL_ACCESS_TOKEN = originalToken;
   process.env.LINE_CHANNEL_SECRET = originalSecret;
   vi.unstubAllGlobals();
@@ -37,5 +66,27 @@ describe("LINE review routes", () => {
     const response = await listReviews(new Request("https://example.test/api/line/reviews?reviewCode=R-ABC234"));
     const json = await response.json() as { reviews: Array<{ events: Array<{ event: string }> }> };
     expect(json.reviews[0].events.map((event) => event.event)).toEqual(["sent", "approved"]);
+  });
+
+  it("does not expose a raw LINE recipient ID in review responses", async () => {
+    process.env.LINE_CHANNEL_ACCESS_TOKEN = "token";
+    vi.stubGlobal("fetch", vi.fn(async () => new Response("{}", { status: 200 })));
+    await sendReview(new Request("https://example.test", {
+      method: "POST",
+      body: JSON.stringify({
+        contentId: "private-content",
+        cycleId: "private-cycle",
+        reviewCode: "R-DEF456",
+        recipientUserId: "U0123456789abcdef",
+        messages: [{ type: "text", text: "review" }],
+      }),
+    }));
+
+    const response = await listReviews(new Request("https://example.test/api/line/reviews?reviewCode=R-DEF456"));
+    const json = await response.json() as { reviews: Array<{ recipientUserId?: string; recipientMasked?: string }> };
+
+    expect(JSON.stringify(json)).not.toContain("U0123456789abcdef");
+    expect(json.reviews[0].recipientMasked).toBe("••••cdef");
+    expect(json.reviews[0].recipientUserId).toBeUndefined();
   });
 });

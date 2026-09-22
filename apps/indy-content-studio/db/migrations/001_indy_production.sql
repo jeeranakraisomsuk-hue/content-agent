@@ -27,6 +27,29 @@ create table if not exists line_webhook_events (
   received_at timestamptz not null default now()
 );
 
+create table if not exists line_reviews (
+  review_code text primary key,
+  content_id text not null,
+  cycle_id text not null,
+  encrypted_recipient_user_id text not null,
+  created_at timestamptz not null default now(),
+  unique (content_id, cycle_id)
+);
+
+create table if not exists line_review_events (
+  id text primary key,
+  review_code text not null references line_reviews(review_code) on delete cascade,
+  event text not null check (event in ('queued', 'sent', 'approved', 'correction-requested', 'failed')),
+  comment text,
+  occurred_at timestamptz not null,
+  provider_receipt text,
+  webhook_event_id text unique,
+  created_at timestamptz not null default now()
+);
+
+create index if not exists line_review_events_review_code_occurred_at_idx
+  on line_review_events (review_code, occurred_at, id);
+
 create table if not exists line_deliveries (
   id uuid primary key,
   idempotency_key text not null unique,
