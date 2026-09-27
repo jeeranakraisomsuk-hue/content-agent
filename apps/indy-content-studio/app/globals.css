@@ -347,12 +347,13 @@ button:disabled { opacity: .5; cursor: not-allowed; }
 .action-day-detail-heading h2 { margin: 0; font-size: 17px; }
 .action-day-detail-heading > span { color: rgba(45,42,39,.64); font-size: 12px; }
 .action-step-list { display: grid; gap: 7px; margin: 0; padding: 0; list-style: none; }
-.action-step-row { display: flex; min-width: 0; align-items: center; gap: 10px; padding: 9px 11px; border: 1px solid rgba(45,42,39,.08); border-radius: 11px; background: rgba(255,255,255,.65); }
+.action-step-row { display: grid; min-width: 0; gap: 9px; padding: 9px 11px; border: 1px solid rgba(45,42,39,.08); border-radius: 11px; background: rgba(255,255,255,.65); }
 .action-step-row.is-done { border-color: rgba(61,128,76,.28); background: rgba(104,170,112,.2); color: #2f5d35; }
 .action-step-row.is-doing { background: rgba(235,193,73,.17); }
-.action-step-row label { display: flex; min-width: 0; flex: 1; align-items: center; gap: 9px; cursor: pointer; }
+.action-step-main { display: flex; min-width: 0; align-items: center; gap: 10px; }
+.action-step-main label { display: flex; min-width: 0; flex: 1; align-items: center; gap: 9px; cursor: pointer; }
 .action-step-row input[type="checkbox"] { width: 17px; height: 17px; flex: 0 0 auto; accent-color: #3e8249; cursor: pointer; }
-.action-step-row label span { display: grid; min-width: 0; gap: 2px; }
+.action-step-main label span { display: grid; min-width: 0; gap: 2px; }
 .action-step-row strong, .action-step-row small { overflow-wrap: anywhere; }
 .action-step-row small { color: rgba(45,42,39,.59); }
 .action-step-row .action-step-schedule, .action-suggestion-copy .action-step-schedule { color: rgba(45,42,39,.67); font-size: 11px; }
@@ -360,6 +361,16 @@ button:disabled { opacity: .5; cursor: not-allowed; }
 .action-step-row.is-done .action-step-status { color: #2f5d35; font-weight: 700; }
 .action-step-row button { padding: 5px 8px; border: 0; border-radius: 8px; background: rgba(135,156,129,.18); color: var(--focus); cursor: pointer; font-size: 11px; }
 .action-step-row button:disabled { cursor: wait; }
+.action-step-actions, .action-step-editor-actions, .action-step-delete-confirmation { display: flex; flex-wrap: wrap; align-items: center; justify-content: end; gap: 6px; }
+.action-step-actions button { padding: 5px 9px; font-weight: 700; }
+.action-step-actions .action-step-edit-button { background: rgba(235,193,73,.25); color: #7a5910; }
+.action-step-actions .action-step-delete-button, .action-step-delete-confirmation .action-step-confirm-delete-button { background: rgba(220,87,76,.17); color: #8d332b; }
+.action-step-editor { display: grid; grid-template-columns: minmax(0, 1.5fr) minmax(150px, .8fr) auto; gap: 8px; align-items: end; padding: 10px; border-top: 1px solid rgba(45,42,39,.1); }
+.action-step-editor label { display: grid; gap: 4px; color: rgba(45,42,39,.68); font-size: 11px; }
+.action-step-editor input { min-width: 0; padding: 7px 8px; border: 1px solid rgba(45,42,39,.15); border-radius: 8px; background: rgba(255,255,255,.8); color: var(--ink); font: inherit; }
+.action-step-editor .action-step-save-button { background: rgba(135,156,129,.22); color: var(--focus); font-weight: 700; }
+.action-step-cancel-button { background: rgba(45,42,39,.08) !important; color: rgba(45,42,39,.72) !important; }
+.action-step-delete-confirmation { justify-content: start; padding: 8px 10px; border-top: 1px solid rgba(220,87,76,.18); color: #8d332b; font-size: 12px; }
 .action-plan-empty { margin: 0; color: rgba(45,42,39,.57); font-size: 13px; }
 .action-plan-error { margin: 0; padding: 9px 12px; border-radius: 10px; background: rgba(220,87,76,.14); color: #8d332b; }
 .action-today-layout { display: grid; grid-template-columns: minmax(0, 1.7fr) minmax(265px, 1fr); gap: 18px; align-items: start; }
@@ -388,7 +399,7 @@ button:disabled { opacity: .5; cursor: not-allowed; }
 .action-suggestion-group button { width: 29px; height: 29px; flex: 0 0 auto; padding: 0; border: 0; border-radius: 8px; background: transparent; color: var(--focus); cursor: pointer; font-size: 21px; line-height: 1; }
 .action-suggestion-group button:hover, .action-suggestion-group button:focus-visible { background: rgba(135,156,129,.18); }
 @media (max-width: 760px) { .action-today-layout { grid-template-columns: 1fr; } .action-today-main { min-height: 0; } }
-@media (max-width: 640px) { .action-calendar--week .action-calendar-weekdays { display: none; } .action-calendar--week .action-calendar-row:not(.action-calendar-weekdays) { grid-template-columns: repeat(2, minmax(0, 1fr)); } .action-calendar--week .action-calendar-cell { border-right: 1px solid rgba(45,42,39,.08); } .action-calendar--week .action-calendar-day { min-height: 76px; } .action-calendar--month .action-calendar-day { min-height: 52px; padding: 5px 3px; align-items: center; } .action-calendar--month .action-calendar-day-number { font-size: 13px; } .action-calendar--month .action-calendar-count { font-size: 9px; } .action-calendar-weekdays span { padding: 8px 2px; font-size: 9px; } .action-step-row { flex-wrap: wrap; } }
+@media (max-width: 640px) { .action-calendar--week .action-calendar-weekdays { display: none; } .action-calendar--week .action-calendar-row:not(.action-calendar-weekdays) { grid-template-columns: repeat(2, minmax(0, 1fr)); } .action-calendar--week .action-calendar-cell { border-right: 1px solid rgba(45,42,39,.08); } .action-calendar--week .action-calendar-day { min-height: 76px; } .action-calendar--month .action-calendar-day { min-height: 52px; padding: 5px 3px; align-items: center; } .action-calendar--month .action-calendar-day-number { font-size: 13px; } .action-calendar--month .action-calendar-count { font-size: 9px; } .action-calendar-weekdays span { padding: 8px 2px; font-size: 9px; } .action-step-main { flex-wrap: wrap; } .action-step-editor { grid-template-columns: 1fr; } .action-step-editor-actions { justify-content: start; } }
 @media (max-width: 700px) { .line-send-composer { padding: 20px; } }
 .media-actions { display: flex; flex-wrap: wrap; gap: 8px; justify-content: end; }
 .media-actions button, .media-upload-button { display: inline-flex; align-items: center; gap: 6px; padding: 9px 12px; border: 0; border-radius: 12px; background: var(--ink); color: #fffdfa; cursor: pointer; font-size: 13px; font-weight: 700; }

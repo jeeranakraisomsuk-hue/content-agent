@@ -25,6 +25,7 @@ export interface ActionTask {
   title: string;
   scheduledDate: string;
   status: StepStatus;
+  owner?: string | null;
   createdAt: string;
   updatedAt: string;
 }

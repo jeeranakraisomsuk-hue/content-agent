@@ -112,6 +112,64 @@ describe("ActionPlanWorkspace", () => {
     expect((await repository.read()).actionTasks[0].status).toBe("done");
   });
 
+  it("assigns a quick-added task to the selected owner and hides it from other owners", async () => {
+    const repository = createRepository();
+    render(<DashboardDataProvider repository={repository}><ActionPlanWorkspace /></DashboardDataProvider>);
+    fireEvent.change(await screen.findByLabelText("วันที่อ้างอิง"), { target: { value: "2026-09-24" } });
+    const ownerFilter = screen.getByRole("combobox", { name: "กรองผู้รับผิดชอบ" });
+    fireEvent.change(ownerFilter, { target: { value: "colofill" } });
+    fireEvent.change(screen.getByRole("textbox", { name: "เพิ่มงานทั่วไป" }), { target: { value: "ถ่ายเบื้องหลัง" } });
+    fireEvent.click(screen.getByRole("button", { name: "เพิ่มงาน" }));
+
+    expect(await screen.findByRole("checkbox", { name: "ทำเสร็จ ถ่ายเบื้องหลัง" })).toBeVisible();
+    expect((await repository.read()).actionTasks).toEqual([expect.objectContaining({ title: "ถ่ายเบื้องหลัง", owner: "colofill" })]);
+    fireEvent.change(ownerFilter, { target: { value: "Misschilli" } });
+    expect(screen.queryByRole("checkbox", { name: "ทำเสร็จ ถ่ายเบื้องหลัง" })).not.toBeInTheDocument();
+  });
+
+  it("edits a standalone task from its Action Plan row", async () => {
+    const repository = createRepository({ includeStandalone: true });
+    render(<DashboardDataProvider repository={repository}><ActionPlanWorkspace /></DashboardDataProvider>);
+    fireEvent.change(await screen.findByLabelText("วันที่อ้างอิง"), { target: { value: "2026-09-24" } });
+    fireEvent.click(screen.getByRole("button", { name: "แก้ไข ซื้อพร็อพ" }));
+    fireEvent.change(screen.getByRole("textbox", { name: "แก้ไขชื่องาน ซื้อพร็อพ" }), { target: { value: "ซื้อพร็อพใหม่" } });
+    fireEvent.click(screen.getByRole("button", { name: "บันทึกงาน ซื้อพร็อพ" }));
+
+    await waitFor(() => expect((repository.read()).then((state) => state.actionTasks[0].title)).resolves.toBe("ซื้อพร็อพใหม่"));
+  });
+
+  it("deletes a standalone task only after confirmation", async () => {
+    const repository = createRepository({ includeStandalone: true });
+    render(<DashboardDataProvider repository={repository}><ActionPlanWorkspace /></DashboardDataProvider>);
+    fireEvent.change(await screen.findByLabelText("วันที่อ้างอิง"), { target: { value: "2026-09-24" } });
+    fireEvent.click(screen.getByRole("button", { name: "ลบ ซื้อพร็อพ" }));
+    expect(screen.getByRole("button", { name: "ยืนยันลบ ซื้อพร็อพ" })).toBeVisible();
+    fireEvent.click(screen.getByRole("button", { name: "ยืนยันลบ ซื้อพร็อพ" }));
+
+    await waitFor(() => expect((repository.read()).then((state) => state.actionTasks)).resolves.toEqual([]));
+  });
+
+  it("edits a content step from its Action Plan row", async () => {
+    const repository = createRepository();
+    render(<DashboardDataProvider repository={repository}><ActionPlanWorkspace /></DashboardDataProvider>);
+    fireEvent.change(await screen.findByLabelText("วันที่อ้างอิง"), { target: { value: "2026-09-24" } });
+    fireEvent.click(screen.getByRole("button", { name: "แก้ไข ตัดต่อ — ถ่ายคลิป" }));
+    fireEvent.change(screen.getByRole("textbox", { name: "แก้ไขชื่อขั้นตอน ตัดต่อ — ถ่ายคลิป" }), { target: { value: "ตัดต่อเวอร์ชันใหม่" } });
+    fireEvent.click(screen.getByRole("button", { name: "บันทึกขั้นตอน ตัดต่อ — ถ่ายคลิป" }));
+
+    await waitFor(() => expect((repository.read()).then((state) => state.contents[0].processSteps[0].name)).resolves.toBe("ตัดต่อเวอร์ชันใหม่"));
+  });
+
+  it("deletes a content step only after confirmation", async () => {
+    const repository = createRepository();
+    render(<DashboardDataProvider repository={repository}><ActionPlanWorkspace /></DashboardDataProvider>);
+    fireEvent.change(await screen.findByLabelText("วันที่อ้างอิง"), { target: { value: "2026-09-24" } });
+    fireEvent.click(screen.getByRole("button", { name: "ลบ ตัดต่อ — ถ่ายคลิป" }));
+    fireEvent.click(screen.getByRole("button", { name: "ยืนยันลบ ตัดต่อ — ถ่ายคลิป" }));
+
+    await waitFor(() => expect((repository.read()).then((state) => state.contents[0].processSteps)).resolves.toHaveLength(1));
+  });
+
   it("shows a compact seven-day calendar and selects a day for its checklist", async () => {
     render(<DashboardDataProvider repository={createRepository()}><ActionPlanWorkspace /></DashboardDataProvider>);
     fireEvent.change(await screen.findByLabelText("วันที่อ้างอิง"), { target: { value: "2026-09-24" } });

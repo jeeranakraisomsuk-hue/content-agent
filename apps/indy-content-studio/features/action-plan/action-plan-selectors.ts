@@ -30,16 +30,16 @@ export function selectActionPlanEntries(state: DashboardState, filters?: { owner
           .sort((left, right) => compareScheduleTimestamps(left.publishAt!, right.publishAt!))
           .map(({ platform, publishAt }) => ({ platform, publishAt: publishAt! })),
       })));
-  const standaloneTasks = !filters?.owner
-    ? (state.actionTasks ?? []).filter((task) => !filters?.status || task.status === filters.status).map((task): ActionPlanEntry => ({
+  const standaloneTasks = (state.actionTasks ?? [])
+    .filter((task) => (!filters?.owner || task.owner === filters.owner) && (!filters?.status || task.status === filters.status)).map((task): ActionPlanEntry => ({
       kind: "standalone",
       id: task.id,
       name: task.title,
       scheduledDate: task.scheduledDate,
       status: task.status,
       order: 0,
+      owner: task.owner ?? undefined,
     }))
-    : [];
   return [...projectSteps, ...standaloneTasks];
 }
 

@@ -4,7 +4,7 @@ import { useMemo, useState, type FormEvent } from "react";
 import { useDashboardData } from "../../data/DashboardDataProvider";
 import type { Platform, StepStatus } from "../../domain/types";
 import { formatBangkokSchedule } from "../../calendar/schedule-time";
-import { addStandaloneActionTask, rescheduleProcessStep, rescheduleStandaloneActionTask, setProcessStepStatus, setStandaloneActionTaskStatus } from "../action-plan-commands";
+import { addStandaloneActionTask, deleteProcessStep, deleteStandaloneActionTask, rescheduleProcessStep, rescheduleStandaloneActionTask, setProcessStepStatus, setStandaloneActionTaskStatus, updateProcessStep, updateStandaloneActionTask } from "../action-plan-commands";
 import { selectActionPlan, selectActionPlanEntries, type ActionPlanEntry } from "../action-plan-selectors";
 
 const WEEKDAYS = ["จันทร์", "อังคาร", "พุธ", "พฤหัส", "ศุกร์", "เสาร์", "อาทิตย์"];
@@ -58,6 +58,12 @@ export function ActionPlanWorkspace() {
   const [pendingKey, setPendingKey] = useState<string | null>(null);
   const [saveError, setSaveError] = useState<string | null>(null);
   const [selectedOwner, setSelectedOwner] = useState("");
+  const [editingKey, setEditingKey] = useState<string | null>(null);
+  const [editName, setEditName] = useState("");
+  const [editDate, setEditDate] = useState("");
+  const [editSavingKey, setEditSavingKey] = useState<string | null>(null);
+  const [confirmDeleteKey, setConfirmDeleteKey] = useState<string | null>(null);
+  const [deletingKey, setDeletingKey] = useState<string | null>(null);
   const ownerOptions = dashboard.state?.ownerOptions ?? [];
   const ownerFilter = ownerOptions.includes(selectedOwner) ? selectedOwner : "";
   const filters = ownerFilter ? { owner: ownerFilter } : undefined;
@@ -86,7 +92,7 @@ export function ActionPlanWorkspace() {
     setSaveError(null);
     try {
       await dashboard.mutate((state) => addStandaloneActionTask(state, {
-        title: quickTitle, date: anchor, id: `content-${crypto.randomUUID()}`, now: new Date().toISOString(),
+        title: quickTitle, date: anchor, owner: ownerFilter || null, id: `content-${crypto.randomUUID()}`, now: new Date().toISOString(),
       }));
       setQuickTitle("");
     } catch (error) {
@@ -132,23 +138,92 @@ export function ActionPlanWorkspace() {
     }
   }
 
+  function displayName(step: ActionStep): string {
+    return step.kind === "standalone" ? step.name : `${step.name} — ${step.contentTitle}`;
+  }
+
+  function startEditing(step: ActionStep) {
+    setEditingKey(stepKey(step));
+    setEditName(step.name);
+    setEditDate(step.scheduledDate ?? "");
+    setConfirmDeleteKey(null);
+    setSaveError(null);
+  }
+
+  function cancelEditing() {
+    setEditingKey(null);
+    setEditName("");
+    setEditDate("");
+  }
+
+  async function saveEdit(event: FormEvent<HTMLFormElement>, step: ActionStep) {
+    event.preventDefault();
+    const key = stepKey(step);
+    if (editSavingKey === key) return;
+    setEditSavingKey(key);
+    setSaveError(null);
+    try {
+      await dashboard.mutate((state) => step.kind === "standalone"
+        ? updateStandaloneActionTask(state, step.id, { title: editName, scheduledDate: editDate, now: new Date().toISOString() })
+        : updateProcessStep(state, step.contentId!, step.id, { name: editName, scheduledDate: editDate || null, now: new Date().toISOString() }));
+      cancelEditing();
+    } catch (error) {
+      setSaveError(error instanceof Error ? error.message : "แก้ไขงานไม่สำเร็จ กรุณาลองอีกครั้ง");
+    } finally {
+      setEditSavingKey(null);
+    }
+  }
+
+  async function deleteStep(step: ActionStep) {
+    const key = stepKey(step);
+    if (deletingKey === key) return;
+    setDeletingKey(key);
+    setSaveError(null);
+    try {
+      await dashboard.mutate((state) => step.kind === "standalone"
+        ? deleteStandaloneActionTask(state, step.id)
+        : deleteProcessStep(state, step.contentId!, step.id));
+      setConfirmDeleteKey(null);
+      if (editingKey === key) cancelEditing();
+    } catch (error) {
+      setSaveError(error instanceof Error ? error.message : "ลบงานไม่สำเร็จ กรุณาลองอีกครั้ง");
+    } finally {
+      setDeletingKey(null);
+    }
+  }
+
   function renderStep(step: ActionStep) {
     const key = stepKey(step);
     const status = effectiveStatus(step);
+    const label = displayName(step);
+    const isEditing = editingKey === key;
+    const isConfirmingDelete = confirmDeleteKey === key;
     return (
       <li key={key} className={`action-step-row is-${status}`}>
-        <label>
-          <input
-            type="checkbox"
-            aria-label={step.kind === "standalone" ? `ทำเสร็จ ${step.name}` : `ทำเสร็จ ${step.name} — ${step.contentTitle}`}
-            checked={status === "done"}
-            disabled={pendingKey === key}
-            onChange={(event) => void updateStatus(step, event.target.checked ? "done" : "todo")}
-          />
-        <span><strong>{step.name}</strong>{step.kind === "content-step" && <><small>{step.contentTitle}</small><small className="action-step-schedule">{publicationScheduleLabel(step)}</small></>}</span>
-        </label>
-        <span className="action-step-status">{STATUS_LABELS[status]}</span>
-        {status === "todo" && <button type="button" disabled={pendingKey === key} onClick={() => void updateStatus(step, "doing")}>เริ่มทำ</button>}
+        <div className="action-step-main">
+          <label>
+            <input
+              type="checkbox"
+              aria-label={step.kind === "standalone" ? `ทำเสร็จ ${step.name}` : `ทำเสร็จ ${step.name} — ${step.contentTitle}`}
+              checked={status === "done"}
+              disabled={pendingKey === key}
+              onChange={(event) => void updateStatus(step, event.target.checked ? "done" : "todo")}
+            />
+            <span><strong>{step.name}</strong>{step.kind === "content-step" && <><small>{step.contentTitle}</small><small className="action-step-schedule">{publicationScheduleLabel(step)}</small></>}</span>
+          </label>
+          <span className="action-step-status">{STATUS_LABELS[status]}</span>
+          {status === "todo" && <button type="button" disabled={pendingKey === key} onClick={() => void updateStatus(step, "doing")}>เริ่มทำ</button>}
+          <div className="action-step-actions" aria-label={`จัดการ ${label}`}>
+            <button type="button" className="action-step-edit-button" aria-label={`แก้ไข ${label}`} onClick={() => startEditing(step)}>แก้ไข</button>
+            <button type="button" className="action-step-delete-button" aria-label={`ลบ ${label}`} onClick={() => { setConfirmDeleteKey(key); setEditingKey(null); }}>ลบ</button>
+          </div>
+        </div>
+        {isEditing && <form className="action-step-editor" onSubmit={(event) => void saveEdit(event, step)}>
+          <label><span>{step.kind === "standalone" ? "ชื่องาน" : "ชื่อขั้นตอน"}</span><input type="text" aria-label={`${step.kind === "standalone" ? "แก้ไขชื่องาน" : "แก้ไขชื่อขั้นตอน"} ${label}`} value={editName} onChange={(event) => setEditName(event.target.value)} /></label>
+          <label><span>วันที่</span><input type="date" aria-label={`${step.kind === "standalone" ? "แก้ไขวันที่งาน" : "แก้ไขวันที่ขั้นตอน"} ${label}`} value={editDate} onChange={(event) => setEditDate(event.target.value)} /></label>
+          <div className="action-step-editor-actions"><button type="submit" className="action-step-save-button" disabled={editSavingKey === key}>{editSavingKey === key ? "กำลังบันทึก…" : `บันทึก${step.kind === "standalone" ? "งาน" : "ขั้นตอน"} ${label}`}</button><button type="button" className="action-step-cancel-button" onClick={cancelEditing}>ยกเลิก</button></div>
+        </form>}
+        {isConfirmingDelete && <div className="action-step-delete-confirmation" role="group" aria-label={`ยืนยันการลบ ${label}`}><span>ลบ “{label}” ใช่ไหม?</span><button type="button" className="action-step-confirm-delete-button" aria-label={`ยืนยันลบ ${label}`} disabled={deletingKey === key} onClick={() => void deleteStep(step)}>ยืนยันลบ</button><button type="button" className="action-step-cancel-button" onClick={() => setConfirmDeleteKey(null)}>ยกเลิก</button></div>}
       </li>
     );
   }
