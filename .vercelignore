@@ -1,0 +1,3 @@
+# Never upload local or template environment files with the deployment source.
+.env*
+**/.env*

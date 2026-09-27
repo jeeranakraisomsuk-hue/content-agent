@@ -1,10 +1,12 @@
 import type { DashboardState, Platform, PublicationAttempt } from "../domain/types";
+import { buildPublicationIdempotencyKey } from "./publication-eligibility";
 
 export interface PublicationPlanInput {
   contentId: string;
   platform: Platform;
   publishAt: string;
   idempotencyKey?: string;
+  attemptId?: string;
 }
 
 export function createPublicationAttempt(state: DashboardState, input: PublicationPlanInput, now: string): DashboardState {
@@ -15,11 +17,16 @@ export function createPublicationAttempt(state: DashboardState, input: Publicati
   const schedule = content.schedules.find((item) => item.platform === input.platform && item.enabled);
   if (!schedule) throw new Error("ยังไม่ได้เปิดช่องทางนี้ในกำหนดการ");
 
-  const idempotencyKey = input.idempotencyKey ?? `${input.contentId}:${input.platform}:${input.publishAt}`;
+  if (schedule.publishAt && input.publishAt !== schedule.publishAt && input.publishAt !== schedule.publishAt.slice(0, 16)) throw new Error("เวลาส่งไม่ตรงกับกำหนดการของคอนเทนต์");
+  const idempotencyKey = input.idempotencyKey ?? buildPublicationIdempotencyKey(content, input.platform, schedule);
   const existing = state.publicationAttempts.find((attempt) => attempt.idempotencyKey === idempotencyKey);
   if (existing) return state;
-  const attempt: PublicationAttempt = { id: `publication-${Date.now()}`, idempotencyKey, contentId: input.contentId, platform: input.platform, publishAt: input.publishAt, status: "local-plan", queueId: null, providerPublicationId: null, receiptUrl: null, errorCode: null, createdAt: now, updatedAt: now };
-  return { ...state, publicationAttempts: [...state.publicationAttempts, attempt] };
+  const attempt: PublicationAttempt = { id: input.attemptId ?? `publication-${Date.now()}`, idempotencyKey, contentId: input.contentId, platform: input.platform, publishAt: input.publishAt, status: "local-plan", queueId: null, providerPublicationId: null, receiptUrl: null, errorCode: null, createdAt: now, updatedAt: now };
+  return {
+    ...state,
+    contents: state.contents.map((item) => item.id !== content.id ? item : { ...item, schedules: item.schedules.map((itemSchedule) => itemSchedule.platform === input.platform ? { ...itemSchedule, latestAttemptId: attempt.id } : itemSchedule), updatedAt: now }),
+    publicationAttempts: [...state.publicationAttempts, attempt],
+  };
 }
 
 export function updatePublicationAttempt(state: DashboardState, attemptId: string, patch: Partial<Pick<PublicationAttempt, "status" | "queueId" | "providerPublicationId" | "receiptUrl" | "errorCode">>, now: string): DashboardState {

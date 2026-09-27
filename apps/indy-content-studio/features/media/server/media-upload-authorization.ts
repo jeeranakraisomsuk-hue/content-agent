@@ -1,7 +1,16 @@
 import { timingSafeEqual } from "node:crypto";
+import { ADMIN_SESSION_TTL_SECONDS } from "../../auth/server/admin-session";
 
 const UPLOAD_COOKIE_NAME = "indy_media_upload_token";
 type Environment = Readonly<Record<string, string | undefined>>;
+
+export function createMediaUploadCookie(token: string): string {
+  return `${UPLOAD_COOKIE_NAME}=${encodeURIComponent(token)}; Path=/api/media/upload; HttpOnly; Secure; SameSite=Strict; Max-Age=${ADMIN_SESSION_TTL_SECONDS}`;
+}
+
+export function clearMediaUploadCookie(): string {
+  return `${UPLOAD_COOKIE_NAME}=; Path=/api/media/upload; HttpOnly; Secure; SameSite=Strict; Max-Age=0`;
+}
 
 export type MediaUploadAuthorization =
   | { authorized: true }

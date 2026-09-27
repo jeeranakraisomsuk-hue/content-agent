@@ -4,7 +4,16 @@ import { previewDashboardImport, validateDashboardBackup } from "./export-dashbo
 
 function clone<T>(value: T): T { return JSON.parse(JSON.stringify(value)) as T; }
 
-type BackupCollection = "contents" | "media" | "categories" | "formats" | "references" | "captionTemplates" | "corrections" | "monthlyGoals" | "publicationAttempts" | "integrations";
+type BackupCollection = "contents" | "actionTasks" | "media" | "categories" | "formats" | "references" | "captionTemplates" | "corrections" | "monthlyGoals" | "categoryMonthlyGoals" | "publicationAttempts" | "integrations";
+
+type CollectionItem = { id?: string; month?: string; categoryId?: string; provider?: string };
+
+function collectionKey(collection: BackupCollection, item: CollectionItem): string | undefined {
+  if (collection === "monthlyGoals") return item.month;
+  if (collection === "categoryMonthlyGoals") return item.month && item.categoryId ? `${item.month}:${item.categoryId}` : undefined;
+  if (collection === "integrations") return item.provider;
+  return item.id;
+}
 
 export interface ApplyDashboardImportOptions {
   mode: DashboardImportMode;
@@ -17,15 +26,18 @@ export function applyDashboardImport(current: DashboardState, input: DashboardBa
   if (options.mode === "replace") return clone(backup.data) as DashboardState;
 
   const next = clone(current);
-  const collections: BackupCollection[] = ["contents", "media", "categories", "formats", "references", "captionTemplates", "corrections", "monthlyGoals", "publicationAttempts", "integrations"];
+  const collections: BackupCollection[] = ["contents", "actionTasks", "media", "categories", "formats", "references", "captionTemplates", "corrections", "monthlyGoals", "categoryMonthlyGoals", "publicationAttempts", "integrations"];
   for (const collection of collections) {
-    const existing = new Set((next[collection] as Array<{ id?: string; month?: string; provider?: string }>).map((item) => item.id ?? item.month ?? item.provider));
-    const incoming = backup.data[collection] as Array<{ id?: string; month?: string; provider?: string }>;
+    const existing = new Set((next[collection] as CollectionItem[]).map((item) => collectionKey(collection, item)).filter((key): key is string => Boolean(key)));
+    const incoming = backup.data[collection] as CollectionItem[];
     const additions = incoming.filter((item) => {
-      const key = item.id ?? item.month ?? item.provider;
+      const key = collectionKey(collection, item);
       return key !== undefined && !existing.has(key);
     });
     (next[collection] as unknown as Array<unknown>).push(...clone(additions));
+  }
+  for (const owner of backup.data.ownerOptions) {
+    if (!next.ownerOptions.some((current) => current.localeCompare(owner, undefined, { sensitivity: "accent" }) === 0)) next.ownerOptions.push(owner);
   }
   return next;
 }

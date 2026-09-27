@@ -1,11 +1,12 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { AppShell, type WorkspaceItem } from "./AppShell";
 import { TodayOverview, type TodayOverviewState } from "../features/dashboard/components/TodayOverview";
 import { CreateContentModal, type CreateContentInput } from "../features/dashboard/components/CreateContentModal";
 import { TaskDetailDrawer } from "../features/dashboard/components/TaskDetailDrawer";
 import { LineSendConfirmation } from "../features/dashboard/components/LineSendConfirmation";
+import { LineSendComposer, type LineSendDraft } from "../features/dashboard/components/LineSendComposer";
 import { dashboardTaskFromContent, dashboardTaskToContent, dashboardTaskToMedia, type DashboardTask } from "../features/dashboard/dashboard-model";
 import { useDashboardWorkspace } from "../features/dashboard/useDashboardWorkspace";
 import { DashboardDataProvider, useDashboardData } from "../features/data/DashboardDataProvider";
@@ -22,12 +23,18 @@ import { ActionPlanWorkspace } from "../features/action-plan/components/ActionPl
 import { ProductionBoardWorkspace } from "../features/production/components/ProductionBoardWorkspace";
 import { CorrectionsWorkspace } from "../features/line-oa/components/CorrectionsWorkspace";
 import { MakeDeliveryWorkspace } from "../features/publication/components/MakeDeliveryWorkspace";
+import { IndexedDbMediaBlobStore } from "../features/media/indexeddb-media-blob-store";
+import type { MediaBlobStore } from "../features/media/media-blob-store";
+import { uploadMediaToBlob } from "../features/media/blob-media-upload";
+import { applyLineReviewEvent, beginReviewCycle } from "../features/line-oa/review-model";
 
 type LineConnectionView = {
   view: "loading" | "authenticated" | "unauthenticated" | "error";
   status: string | null;
   maskedRecipient: string | null;
 };
+
+type StorageHealth = { status: "checking" | "ready" | "unavailable"; reason: string | null };
 
 type LineDeliveryResult = {
   id: string;
@@ -36,7 +43,7 @@ type LineDeliveryResult = {
   sentAt: string | null;
 };
 
-function HomePageContent() {
+function HomePageContent({ mediaBlobStore }: { mediaBlobStore: MediaBlobStore }) {
   const dashboard = useDashboardData();
   const [draftTasks, setDraftTasks] = useState<DashboardTask[]>([]);
   const persistedTasks = useMemo(() => {
@@ -52,16 +59,22 @@ function HomePageContent() {
   const workspace = useDashboardWorkspace(todayTasks);
   const [todayState, setTodayState] = useState<TodayOverviewState>("ready");
   const [activeWorkspace, setActiveWorkspace] = useState<WorkspaceItem>("overview");
+  const [createInitialDate, setCreateInitialDate] = useState("");
   const [continuationNotice, setContinuationNotice] = useState<string | null>(null);
   const [isLineConfirmationOpen, setLineConfirmationOpen] = useState(false);
+  const [isLineComposerOpen, setLineComposerOpen] = useState(false);
+  const [lineSendTask, setLineSendTask] = useState<DashboardTask | null>(null);
+  const pendingLineTaskId = useRef<string | null>(null);
   const [isFullEditorOpen, setFullEditorOpen] = useState(false);
   const [lineConnection, setLineConnection] = useState<LineConnectionView>({ view: "loading", status: null, maskedRecipient: null });
+  const [storageHealth, setStorageHealth] = useState<StorageHealth>({ status: "checking", reason: null });
   const selectedTask = todayTasks.find((task) => task.id === workspace.selectedTaskId);
-  const selectedContent = dashboard.state?.contents.find((content) => content.id === selectedTask?.id && !content.deletedAt) ?? null;
   const lineConnected = lineConnection.view === "authenticated" && lineConnection.status === "connected";
-  const drawerConnectionStatus = lineConnection.view === "authenticated"
-    ? lineConnected ? "connected" : lineConnection.status === "disabled" ? "disabled" : "not_connected"
-    : lineConnection.view;
+
+  function openCreateContent(initialDate = "") {
+    setCreateInitialDate(initialDate);
+    workspace.setCreateOpen(true);
+  }
 
   useEffect(() => {
     if (activeWorkspace !== "overview") return;
@@ -87,56 +100,191 @@ function HomePageContent() {
     return () => { active = false; };
   }, [activeWorkspace]);
 
+  useEffect(() => {
+    if (!isLineComposerOpen) return;
+    let active = true;
+    setStorageHealth({ status: "checking", reason: null });
+    void fetch("/api/integrations/health", { cache: "no-store" })
+      .then(async (response) => {
+        if (!response.ok) throw new Error("storage-health-unavailable");
+        const payload = await response.json() as { integrations?: Array<{ provider?: string; status?: string; category?: string }> };
+        const drive = payload.integrations?.find((integration) => integration.provider === "blob");
+        if (active) setStorageHealth(drive?.status === "connected"
+          ? { status: "ready", reason: null }
+          : { status: "unavailable", reason: drive?.category ?? "provider" });
+      })
+      .catch(() => { if (active) setStorageHealth({ status: "unavailable", reason: "provider" }); });
+    return () => { active = false; };
+  }, [isLineComposerOpen]);
+
   function continueSelectedTask() {
     if (selectedTask) setContinuationNotice(`พร้อมทำงานต่อที่ขั้นตอน ${selectedTask.workflowStage}`);
   }
 
-  function createTask(input: CreateContentInput) {
-    const task: DashboardTask = { id: `task-${Date.now()}`, priority: "normal", workflowStage: "วางแผน", lastWorkedAt: new Date().toISOString(), ...input, scheduledTime: input.scheduledTime || "ยังไม่กำหนด" };
-    setDraftTasks((current) => [...current, task]);
-    void saveTask(task);
-    workspace.setCreateOpen(false);
-    workspace.openTask(task.id);
+  function requestLineDelivery() {
+    setContinuationNotice(null);
+    setLineComposerOpen(true);
   }
 
-  async function saveTask(task: DashboardTask) {
+  async function submitLineDraft(draft: LineSendDraft) {
+    if (storageHealth.status !== "ready") throw new Error("media-storage-unavailable");
     const now = new Date().toISOString();
-    await dashboard.mutate((current) => {
-      const taskMedia = dashboardTaskToMedia(task, now);
-      const mediaIds = new Set(taskMedia.map((asset) => asset.id));
-      return upsertContent({
-        ...current,
-        media: [...current.media.filter((asset) => !mediaIds.has(asset.id)), ...taskMedia],
-      }, dashboardTaskToContent(task, current, now));
-    });
+    const taskId = pendingLineTaskId.current ?? `line-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+    pendingLineTaskId.current = taskId;
+    const task: DashboardTask = {
+      id: taskId,
+      title: `ส่ง LINE · ${draft.plannedDate}`,
+      category: dashboard.state?.categories.find((category) => category.id === draft.categoryId)?.name ?? "",
+      format: dashboard.state?.formats.find((format) => format.id === draft.formatId)?.name ?? "",
+      owner: "INDY ทีมคอนเทนต์",
+      objective: "awareness",
+      priority: "normal",
+      workflowStage: "พร้อมโพสต์",
+      lastWorkedAt: now,
+      scheduledTime: draft.plannedDate,
+      caption: draft.caption,
+      assets: [{ name: draft.file.name, type: draft.file.type, size: draft.file.size }],
+      processSteps: [],
+    };
+    const savedTask = await saveTask(task, [draft.file]);
+    pendingLineTaskId.current = null;
+    setLineSendTask(savedTask);
+    setLineComposerOpen(false);
+    setLineConfirmationOpen(true);
+  }
+
+  async function createTask(input: CreateContentInput) {
+    const now = new Date().toISOString();
+    const taskId = `task-${Date.now()}`;
+    const task: DashboardTask = {
+      id: taskId,
+      title: input.title,
+      category: input.category,
+      format: input.format,
+      owner: input.owner,
+      objective: input.objective,
+      notes: input.notes,
+      priority: "normal",
+      workflowStage: "วางแผน",
+      lastWorkedAt: now,
+      scheduledTime: input.plannedDate || "ยังไม่กำหนด",
+      caption: "",
+      assets: [],
+      processSteps: [{ id: `step-${taskId}-prepare`, name: "เตรียมงาน", scheduledDate: input.plannedDate || null, status: "todo", order: 0 }],
+      platformSchedules: input.platformSchedules,
+    };
+    await saveTask(task);
+    setDraftTasks((current) => [...current, task]);
+    workspace.setCreateOpen(false);
+    workspace.closeTask();
+  }
+
+  async function saveTask(task: DashboardTask, files: File[] = []): Promise<DashboardTask> {
+    const now = new Date().toISOString();
+    const taskMedia = dashboardTaskToMedia(task, now);
+    const storedBlobIds: string[] = [];
+    try {
+      for (const [index, file] of files.entries()) {
+        const asset = taskMedia[index];
+        if (!asset) continue;
+        await mediaBlobStore.put(asset.id, file);
+        storedBlobIds.push(asset.id);
+      }
+      await dashboard.mutate((current) => {
+        const mediaIds = new Set(taskMedia.map((asset) => asset.id));
+        return upsertContent({
+          ...current,
+          media: [...current.media.filter((asset) => !mediaIds.has(asset.id)), ...taskMedia],
+        }, dashboardTaskToContent(task, current, now));
+      });
+    } catch (error) {
+      await Promise.all(storedBlobIds.map((id) => mediaBlobStore.remove(id).catch(() => undefined)));
+      throw error;
+    }
+
+    for (const [index, file] of files.entries()) {
+      const asset = taskMedia[index];
+      if (!asset) continue;
+      await dashboard.mutate((state) => ({
+        ...state,
+        media: state.media.map((item) => item.id === asset.id
+          ? { ...item, remoteStatus: "uploading", providerFileId: null, previewProviderFileId: null, updatedAt: new Date().toISOString() }
+          : item),
+      }));
+      try {
+        const uploaded = await uploadMediaToBlob({ assetId: asset.id, name: asset.name, mimeType: asset.mimeType, blob: file });
+        await dashboard.mutate((state) => ({
+          ...state,
+          media: state.media.map((item) => item.id === asset.id
+            ? {
+                ...item,
+                remoteStatus: uploaded.remoteStatus,
+                providerFileId: uploaded.remoteStatus === "ready" ? uploaded.providerFileId : null,
+                previewProviderFileId: uploaded.remoteStatus === "ready" ? uploaded.previewProviderFileId : null,
+                updatedAt: new Date().toISOString(),
+              }
+            : item),
+        }));
+        if (uploaded.remoteStatus !== "ready") throw new Error("media-storage-unavailable");
+      } catch (error) {
+        await dashboard.mutate((state) => ({
+          ...state,
+          media: state.media.map((item) => item.id === asset.id
+            ? { ...item, remoteStatus: "failed", providerFileId: null, previewProviderFileId: null, updatedAt: new Date().toISOString() }
+            : item),
+        }));
+        if (error instanceof Error && error.message === "media-storage-unavailable") throw error;
+        throw new Error("provider-upload-failed");
+      }
+    }
+    return {
+      ...task,
+      updatedAt: now,
+      assets: (task.assets ?? []).map((asset) => ({ ...asset, remoteStatus: "ready", remoteReady: true, previewReady: true })),
+    };
   }
 
   return <AppShell activeItem={activeWorkspace} onNavigate={setActiveWorkspace}>
     <main>
       {activeWorkspace === "overview" && <>
         <TodayOverview tasks={todayTasks} state={todayState} onOpenTask={(task) => { setContinuationNotice(null); workspace.openTask(task.id); }} onResumeLatest={workspace.resumeLatest} onRetry={() => setTodayState("ready")} />
-        <button type="button" className="create-task-button" onClick={() => workspace.setCreateOpen(true)}>สร้างชิ้นงานใหม่</button>
-        {selectedTask ? <section className="selected-workflow" aria-label={`ทำงานต่อกับ ${selectedTask.title}`}><p className="eyebrow">กำลังทำงานต่อ</p><h2>{selectedTask.title}</h2><p>ขั้นตอนปัจจุบัน: {selectedTask.workflowStage}</p><button type="button" className="continue-work-button" onClick={continueSelectedTask}>ดำเนินงานต่อที่ขั้นตอน {selectedTask.workflowStage}</button>{continuationNotice && <p className="continuation-notice" role="status">{continuationNotice}</p>}</section> : <p className="selected-workflow-hint" aria-live="polite">เลือกงานเพื่อเปิดขั้นตอนการทำงาน</p>}
+        <div className="home-workflow-actions">
+          <button type="button" className="create-task-button" onClick={() => openCreateContent()}>สร้างชิ้นงานใหม่</button>
+          <button type="button" className="line-send-entry-button" onClick={requestLineDelivery}>ส่งงานใน LINE</button>
+        </div>
+        {selectedTask ? <section className="selected-workflow" aria-label={`ทำงานต่อกับ ${selectedTask.title}`}><p className="eyebrow">กำลังทำงานต่อ</p><h2>{selectedTask.title}</h2><p>ขั้นตอนปัจจุบัน: {selectedTask.workflowStage}</p><button type="button" className="continue-work-button" onClick={continueSelectedTask}>ดำเนินงานต่อที่ขั้นตอน {selectedTask.workflowStage}</button>{continuationNotice && <p className="continuation-notice" role="status">{continuationNotice}</p>}</section> : <p className="selected-workflow-hint" aria-live="polite">{continuationNotice ?? "เลือกงานเพื่อเปิดขั้นตอนการทำงาน"}</p>}
         <OverviewWorkspace />
         <button type="button" className="create-task-button" onClick={() => setFullEditorOpen(true)}>เปิดตัวแก้ไขคอนเทนต์เต็ม</button>
         <ContentEditorDialog mode={selectedTask ? "edit" : "create"} contentId={selectedTask?.id} open={isFullEditorOpen} onClose={() => setFullEditorOpen(false)} />
-        <TaskDetailDrawer task={selectedTask ?? null} connectionStatus={drawerConnectionStatus} authenticatedAdmin={lineConnection.view === "authenticated"} onClose={() => { setLineConfirmationOpen(false); workspace.closeTask(); }} onRequestSend={() => setLineConfirmationOpen(true)} />
+        <TaskDetailDrawer task={selectedTask ?? null} onClose={() => workspace.closeTask()} />
+        <LineSendComposer
+          open={isLineComposerOpen}
+          connectedRecipient={lineConnected}
+          authenticatedAdmin={lineConnection.view === "authenticated"}
+          recipientMasked={lineConnection.maskedRecipient}
+          storageStatus={storageHealth.status}
+          storageReason={storageHealth.reason}
+          categories={dashboard.state?.categories ?? []}
+          formats={dashboard.state?.formats ?? []}
+          onCancel={() => { pendingLineTaskId.current = null; setLineComposerOpen(false); }}
+          onSubmit={submitLineDraft}
+        />
         <LineSendConfirmation
-          task={selectedTask ?? null}
+          task={lineSendTask}
           open={isLineConfirmationOpen}
           connectedRecipient={lineConnected}
           authenticatedAdmin={lineConnection.view === "authenticated"}
           recipientMasked={lineConnection.maskedRecipient}
-          expectedUpdatedAt={selectedContent?.updatedAt ?? null}
-          onCancel={() => setLineConfirmationOpen(false)}
+          expectedUpdatedAt={lineSendTask?.updatedAt ?? null}
+          onCancel={() => { setLineConfirmationOpen(false); setLineSendTask(null); }}
           onConfirm={async (): Promise<LineDeliveryResult> => {
-            if (!selectedContent) return { id: "", status: "failed", errorCategory: "stale_content", sentAt: null };
+            if (!lineSendTask?.updatedAt) return { id: "", status: "failed", errorCategory: "stale_content", sentAt: null };
             let response: Response;
             try {
               response = await fetch("/api/line/send", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ contentId: selectedContent.id, expectedUpdatedAt: selectedContent.updatedAt }),
+                body: JSON.stringify({ contentId: lineSendTask.id, expectedUpdatedAt: lineSendTask.updatedAt }),
               });
             } catch {
               return { id: "", status: "failed", errorCategory: "provider", sentAt: null };
@@ -146,24 +294,46 @@ function HomePageContent() {
             if (!response.ok || !payload.delivery) {
               return { id: "", status: "failed", errorCategory: payload.error ?? "provider", sentAt: null };
             }
+            if (payload.delivery.status === "sent" && lineSendTask) {
+              try {
+                await dashboard.mutate((state) => ({
+                  ...state,
+                  contents: state.contents.map((item) => item.id === lineSendTask.id
+                    ? (() => {
+                        const sentAt = new Date().toISOString();
+                        return applyLineReviewEvent(
+                          beginReviewCycle(item, `line-send-${item.id}-${payload.delivery?.id ?? Date.now()}`, sentAt),
+                          "sent",
+                          sentAt,
+                          null,
+                          payload.delivery?.id,
+                        );
+                      })()
+                    : item),
+                }));
+              } catch {
+                // LINE has already accepted the message; don't report a delivery failure for a dashboard-save issue.
+              }
+            }
             return payload.delivery;
           }}
         />
-        <CreateContentModal open={workspace.isCreateOpen} onClose={() => workspace.setCreateOpen(false)} onCreate={createTask} />
       </>}
       {activeWorkspace === "production-board" && <ProductionBoardWorkspace />}
       {activeWorkspace === "settings" && <SettingsWorkspace />}
       {activeWorkspace === "media-library" && <MediaLibraryWorkspace />}
       {activeWorkspace === "references" && <ReferencesWorkspace />}
       {activeWorkspace === "caption-templates" && <CaptionTemplatesWorkspace />}
-      {activeWorkspace === "calendar" && <ContentCalendarWorkspace />}
+      {activeWorkspace === "calendar" && <ContentCalendarWorkspace onCreateTask={(date) => openCreateContent(date)} />}
       {activeWorkspace === "action-plan" && <ActionPlanWorkspace />}
       {activeWorkspace === "corrections" && <CorrectionsWorkspace />}
       {activeWorkspace === "make-delivery" && <MakeDeliveryWorkspace />}
+      <CreateContentModal open={workspace.isCreateOpen} onClose={() => { workspace.setCreateOpen(false); setCreateInitialDate(""); }} onCreate={createTask} categories={dashboard.state?.categories.map((category) => category.name) ?? []} formats={dashboard.state?.formats.map((format) => format.name) ?? []} ownerOptions={dashboard.state?.ownerOptions ?? []} initialDate={createInitialDate} allowedPlatformsByFormat={Object.fromEntries((dashboard.state?.formats ?? []).map((format) => [format.name, format.allowedPlatforms]))} />
     </main>
   </AppShell>;
 }
 
-export function HomePage({ repository }: { repository?: DashboardRepository } = {}) {
-  return <DashboardDataProvider repository={repository}><HomePageContent /></DashboardDataProvider>;
+export function HomePage({ repository, mediaBlobStore }: { repository?: DashboardRepository; mediaBlobStore?: MediaBlobStore } = {}) {
+  const activeBlobStore = useMemo(() => mediaBlobStore ?? new IndexedDbMediaBlobStore(), [mediaBlobStore]);
+  return <DashboardDataProvider repository={repository}><HomePageContent mediaBlobStore={activeBlobStore} /></DashboardDataProvider>;
 }

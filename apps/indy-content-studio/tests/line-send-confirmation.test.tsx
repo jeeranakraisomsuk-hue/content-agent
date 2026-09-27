@@ -7,7 +7,7 @@ const readyTask: DashboardTask = {
   id: "reels",
   title: "ตัดต่อคลิป Reels",
   priority: "urgent",
-  scheduledTime: "10:30",
+  scheduledTime: "2026-09-25",
   caption: "แคปชันตัวอย่าง",
   updatedAt: "2026-09-22T12:00:00.000Z",
   assets: [{ name: "review-reels.mp4", type: "video/mp4", size: 5, remoteReady: true, previewReady: true }],
@@ -27,6 +27,8 @@ describe("LineSendConfirmation", () => {
     expect(dialog).toHaveClass("motion-material-surface", "motion-modal");
     expect(screen.getByText("review-reels.mp4")).toBeVisible();
     expect(screen.getByText("แคปชันตัวอย่าง")).toBeVisible();
+    expect(screen.getByText("2026-09-25")).toBeVisible();
+    expect(screen.getByText(/กดยืนยันจะส่งเข้า LINE ทันที/)).toBeVisible();
     expect(screen.getByText("••••cdef")).toBeVisible();
     expect(screen.getByRole("button", { name: "ยกเลิก" })).toBeVisible();
     fireEvent.click(screen.getByRole("button", { name: "ยืนยันส่ง" }));

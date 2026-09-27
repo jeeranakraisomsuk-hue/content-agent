@@ -18,6 +18,8 @@ async function renderSettings(withUsedContent = false) {
 describe("SettingsWorkspace", () => {
   it("adds a category, toggles approval, and renames it", async () => {
     await renderSettings();
+    expect(await screen.findByText(/หมวดคอนเทนต์ใช้บอกว่าเนื้อหาเกี่ยวกับอะไร/)).toBeVisible();
+    expect(screen.getByText(/รูปแบบการนำเสนอใช้บอกว่าจะเผยแพร่เป็นอะไร/)).toBeVisible();
     fireEvent.click(await screen.findByRole("button", { name: "เพิ่มหมวด" }));
     fireEvent.change(screen.getByLabelText("ชื่อหมวด"), { target: { value: "เบื้องหลัง" } });
     fireEvent.click(screen.getByRole("button", { name: "บันทึกหมวด" }));
@@ -31,10 +33,13 @@ describe("SettingsWorkspace", () => {
     expect(await screen.findByText("เบื้องหลังทีม")).toBeVisible();
   });
 
-  it("adds a format, saves a monthly goal, and reports blocked deletion", async () => {
+  it("adds a format, saves a monthly goal, and removes a used category without orphaning work", async () => {
     await renderSettings(true);
-    fireEvent.click(await screen.findByRole("button", { name: "ลบหมวด รีวิว" }));
-    expect(screen.getByText("หมวดนี้มีชิ้นงานใช้อยู่" )).toBeVisible();
+    const deleteReview = await screen.findByRole("button", { name: "ลบหมวด รีวิว" });
+    expect(deleteReview).toBeEnabled();
+    fireEvent.click(deleteReview);
+    expect(await screen.findByText("ลบหมวดแล้ว และย้ายงานไปที่ ความรู้")).toBeVisible();
+    expect(screen.queryByText("รีวิว", { selector: "strong" })).not.toBeInTheDocument();
     fireEvent.click(await screen.findByRole("button", { name: "เพิ่มรูปแบบ" }));
     fireEvent.change(screen.getByLabelText("ชื่อรูปแบบ"), { target: { value: "Carousel" } });
     fireEvent.change(screen.getByLabelText("ชนิดสื่อ"), { target: { value: "image" } });

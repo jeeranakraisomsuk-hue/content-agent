@@ -15,6 +15,24 @@ function makeContent(): ContentItem {
 }
 
 describe("CorrectionsWorkspace", () => {
+  it("configures and verifies the LINE webhook from the admin workspace", async () => {
+    const fetcher = vi.fn<TestFetcher>(async (input, init) => {
+      const url = String(input);
+      if (url === "/api/line/pairing") return Response.json({ status: "not_connected" });
+      if (url === "/api/line/webhook-settings" && init?.method === "POST") {
+        return Response.json({ configured: true, verified: true, active: true });
+      }
+      throw new Error(`Unexpected request: ${url}`);
+    });
+    vi.stubGlobal("fetch", fetcher);
+
+    render(<DashboardDataProvider repository={new MemoryDashboardRepository()}><CorrectionsWorkspace /></DashboardDataProvider>);
+    fireEvent.click(await screen.findByRole("button", { name: "ตั้งค่า webhook LINE" }));
+
+    expect(await screen.findByText("LINE webhook ตั้งค่าและตรวจสอบแล้ว พร้อมรับคำสั่งจับคู่จากแชตผู้รับ")).toBeVisible();
+    expect(fetcher).toHaveBeenCalledWith("/api/line/webhook-settings", { method: "POST" });
+  });
+
   it("starts a review cycle and resolves an open correction", async () => {
     const content = makeContent();
     const repository = new MemoryDashboardRepository({ ...createEmptyDashboardState(), contents: [content], corrections: [{ id: "correction-1", contentId: content.id, cycleId: "cycle-old", comment: "เพิ่มราคา", status: "open", receivedAt: "now", resolvedAt: null }] });

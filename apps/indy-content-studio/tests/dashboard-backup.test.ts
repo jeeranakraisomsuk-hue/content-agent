@@ -30,4 +30,43 @@ describe("dashboard backup", () => {
     expect(() => applyDashboardImport(current, backup, { mode: "replace" })).toThrow(/สร้าง backup/);
     expect(applyDashboardImport(current, backup, { mode: "replace", preRestoreBackup: backup })).toMatchObject({ schemaVersion: 1 });
   });
+
+  it("round trips independent Action Plan tasks and reads older backups without them", () => {
+    const state = createEmptyDashboardState();
+    state.actionTasks.push({ id: "task-1", title: "ถ่ายรูป", scheduledDate: "2026-09-24", status: "todo", createdAt: "now", updatedAt: "now" });
+    state.categoryMonthlyGoals.push({ month: "2026-09", categoryId: "category-knowledge", target: 4 });
+    const backup = exportDashboardState(state, "now");
+    expect(parseDashboardBackup(backup).data.actionTasks).toEqual(state.actionTasks);
+    expect(parseDashboardBackup(backup).data.categoryMonthlyGoals).toEqual(state.categoryMonthlyGoals);
+    const legacy = structuredClone(backup) as typeof backup;
+    delete (legacy.data as Partial<typeof legacy.data>).actionTasks;
+    delete (legacy.data as Partial<typeof legacy.data>).categoryMonthlyGoals;
+    expect(parseDashboardBackup(legacy).data.actionTasks).toEqual([]);
+    expect(parseDashboardBackup(legacy).data.categoryMonthlyGoals).toEqual([]);
+  });
+
+  it("previews and merges category goals without duplicate month/category entries", () => {
+    const current = createEmptyDashboardState();
+    current.categoryMonthlyGoals.push({ month: "2026-09", categoryId: "category-knowledge", target: 4 });
+    const backupState = createEmptyDashboardState();
+    backupState.categoryMonthlyGoals.push(
+      { month: "2026-09", categoryId: "category-knowledge", target: 8 },
+      { month: "2026-09", categoryId: "category-review", target: 3 },
+    );
+    const backup = exportDashboardState(backupState, "now");
+    const preview = previewDashboardImport(current, backup, "merge");
+    expect(preview.counts.categoryMonthlyGoals).toBe(1);
+    expect(applyDashboardImport(current, backup, { mode: "merge" }).categoryMonthlyGoals).toEqual([
+      { month: "2026-09", categoryId: "category-knowledge", target: 4 },
+      { month: "2026-09", categoryId: "category-review", target: 3 },
+    ]);
+  });
+
+  it("rejects an invalid category target in a backup", () => {
+    const state = createEmptyDashboardState();
+    state.categoryMonthlyGoals.push({ month: "2026-09", categoryId: "category-knowledge", target: 2 });
+    const backup = exportDashboardState(state, "now");
+    const invalid = { ...backup, data: { ...backup.data, categoryMonthlyGoals: [{ month: "2026-09", categoryId: "category-knowledge", target: 0 }] } };
+    expect(() => parseDashboardBackup(invalid)).toThrow("เป้าหมายรายหมวดมีข้อมูลไม่ถูกต้อง");
+  });
 });

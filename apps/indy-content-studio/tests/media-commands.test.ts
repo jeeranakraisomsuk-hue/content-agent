@@ -19,6 +19,8 @@ describe("media commands", () => {
     expect(() => createExternalMedia(state, { id: "bad", name: "คลิป", mimeType: "video/mp4", externalUrl: "http://unsafe.test", now })).toThrow("ต้องเป็นลิงก์ https");
     expect(() => createExternalMedia(state, { id: "video", name: "คลิป", mimeType: "video/mp4", externalUrl: "https://video.test/a.mp4", now })).toThrow("วิดีโอต้องมีลิงก์ภาพตัวอย่าง https");
     const created = createExternalMedia(state, { id: "video", name: "คลิป", mimeType: "video/mp4", externalUrl: "https://video.test/a.mp4", externalPreviewUrl: "https://video.test/poster.jpg", now });
+    expect(created.media[0].remoteStatus).toBe("ready");
+    expect(() => createExternalMedia(state, { id: "credentials", name: "ภาพ", mimeType: "image/jpeg", externalUrl: "https://user:pass@video.test/a.jpg", now })).toThrow("ต้องเป็นลิงก์ https");
     const updated = updateMedia(created, "video", { tags: ["แคมเปญ"], name: "คลิปใหม่" });
     expect(updated.media[0]).toMatchObject({ name: "คลิปใหม่", tags: ["แคมเปญ"] });
     const trashed = moveMediaToTrash(updated, "video", now);

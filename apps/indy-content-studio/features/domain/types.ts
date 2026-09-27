@@ -20,6 +20,15 @@ export interface ProcessStep {
   order: number;
 }
 
+export interface ActionTask {
+  id: string;
+  title: string;
+  scheduledDate: string;
+  status: StepStatus;
+  createdAt: string;
+  updatedAt: string;
+}
+
 export interface PlatformSchedule {
   platform: Platform;
   enabled: boolean;
@@ -147,13 +156,19 @@ export interface MonthlyGoal {
   target: number;
 }
 
+export interface CategoryMonthlyGoal {
+  month: string;
+  categoryId: string;
+  target: number;
+}
+
 export interface PublicationAttempt {
   id: string;
   idempotencyKey: string;
   contentId: string;
   platform: Platform;
   publishAt: string;
-  status: "local-plan" | "submitting" | "queued" | "publishing" | "published" | "failed";
+  status: "local-plan" | "submitting" | "queued" | "publishing" | "published" | "failed" | "cancelled";
   queueId: string | null;
   providerPublicationId: string | null;
   receiptUrl: string | null;
@@ -163,7 +178,7 @@ export interface PublicationAttempt {
 }
 
 export interface IntegrationStatus {
-  provider: "database" | "google-sheets" | "google-drive" | "line" | "make" | "tiktok" | "online-media" | "ai-caption";
+  provider: "database" | "google-sheets" | "google-drive" | "blob" | "line" | "make" | "tiktok" | "online-media" | "ai-caption";
   status: "connected" | "disconnected" | "error";
   checkedAt: string | null;
   message: string;
@@ -172,13 +187,16 @@ export interface IntegrationStatus {
 export interface DashboardState {
   schemaVersion: 1;
   contents: ContentItem[];
+  actionTasks: ActionTask[];
   media: MediaAsset[];
   categories: Category[];
   formats: FormatDefinition[];
+  ownerOptions: string[];
   references: ReferenceIdea[];
   captionTemplates: CaptionTemplate[];
   corrections: CorrectionRequest[];
   monthlyGoals: MonthlyGoal[];
+  categoryMonthlyGoals: CategoryMonthlyGoal[];
   publicationAttempts: PublicationAttempt[];
   integrations: IntegrationStatus[];
   notificationReadIds: string[];

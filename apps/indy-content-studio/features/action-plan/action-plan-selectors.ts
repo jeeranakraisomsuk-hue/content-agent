@@ -1,2 +1,71 @@
 import type { DashboardState, StepStatus } from "../domain/types";
-export function selectActionPlan(state: DashboardState, input: { mode: "week" | "month"; anchorDate: string; filters?: { owner?: string; status?: StepStatus } }) { const anchor = new Date(`${input.anchorDate}T00:00:00Z`); const start = new Date(anchor); const end = new Date(anchor); if (input.mode === "week") { const day = (start.getUTCDay() + 6) % 7; start.setUTCDate(start.getUTCDate() - day); end.setTime(start.getTime()); end.setUTCDate(end.getUTCDate() + 6); } else { start.setUTCDate(1); end.setUTCMonth(end.getUTCMonth() + 1, 0); } const steps = state.contents.filter((content) => !content.deletedAt && (!input.filters?.owner || content.owner === input.filters.owner)).flatMap((content) => content.processSteps.filter((step) => !input.filters?.status || step.status === input.filters.status).map((step) => ({ contentId: content.id, contentTitle: content.title, owner: content.owner, ...step }))); const dated = steps.filter((step) => step.scheduledDate && step.scheduledDate >= start.toISOString().slice(0, 10) && step.scheduledDate <= end.toISOString().slice(0, 10)); const unscheduled = steps.filter((step) => !step.scheduledDate); const days = Array.from({ length: input.mode === "week" ? 7 : end.getUTCDate() }, (_, index) => { const date = new Date(start); date.setUTCDate(start.getUTCDate() + index); const value = date.toISOString().slice(0, 10); return { date: value, steps: dated.filter((step) => step.scheduledDate === value) }; }); const summary = { todo: steps.filter((step) => step.status === "todo").length, doing: steps.filter((step) => step.status === "doing").length, done: steps.filter((step) => step.status === "done").length }; return { days, unscheduled, summary }; }
+
+export interface ActionPlanEntry {
+  kind: "content-step" | "standalone";
+  id: string;
+  name: string;
+  scheduledDate: string | null;
+  status: StepStatus;
+  order: number;
+  contentId?: string;
+  contentTitle?: string;
+  owner?: string;
+}
+
+export function selectActionPlanEntries(state: DashboardState, filters?: { owner?: string; status?: StepStatus }): ActionPlanEntry[] {
+  const projectSteps = state.contents
+    .filter((content) => !content.deletedAt && (!filters?.owner || content.owner === filters.owner))
+    .flatMap((content) => content.processSteps
+      .filter((step) => !filters?.status || step.status === filters.status)
+      .map((step): ActionPlanEntry => ({
+        kind: "content-step",
+        ...step,
+        contentId: content.id,
+        contentTitle: content.title,
+        owner: content.owner,
+      })));
+  const standaloneTasks = !filters?.owner
+    ? (state.actionTasks ?? []).filter((task) => !filters?.status || task.status === filters.status).map((task): ActionPlanEntry => ({
+      kind: "standalone",
+      id: task.id,
+      name: task.title,
+      scheduledDate: task.scheduledDate,
+      status: task.status,
+      order: 0,
+    }))
+    : [];
+  return [...projectSteps, ...standaloneTasks];
+}
+
+export function selectActionPlan(state: DashboardState, input: { mode: "week" | "month"; anchorDate: string; filters?: { owner?: string; status?: StepStatus } }) {
+  const anchor = new Date(`${input.anchorDate}T00:00:00Z`);
+  const start = new Date(anchor);
+  const end = new Date(anchor);
+  if (input.mode === "week") {
+    const day = (start.getUTCDay() + 6) % 7;
+    start.setUTCDate(start.getUTCDate() - day);
+    end.setTime(start.getTime());
+    end.setUTCDate(end.getUTCDate() + 6);
+  } else {
+    start.setUTCDate(1);
+    end.setUTCMonth(end.getUTCMonth() + 1, 0);
+  }
+
+  const entries = selectActionPlanEntries(state, input.filters);
+  const dated = entries.filter((entry) => entry.scheduledDate
+    && entry.scheduledDate >= start.toISOString().slice(0, 10)
+    && entry.scheduledDate <= end.toISOString().slice(0, 10));
+  const unscheduled = entries.filter((entry) => !entry.scheduledDate);
+  const days = Array.from({ length: input.mode === "week" ? 7 : end.getUTCDate() }, (_, index) => {
+    const date = new Date(start);
+    date.setUTCDate(start.getUTCDate() + index);
+    const value = date.toISOString().slice(0, 10);
+    return { date: value, steps: dated.filter((entry) => entry.scheduledDate === value) };
+  });
+  const summary = {
+    todo: entries.filter((entry) => entry.status === "todo").length,
+    doing: entries.filter((entry) => entry.status === "doing").length,
+    done: entries.filter((entry) => entry.status === "done").length,
+  };
+  return { days, unscheduled, summary };
+}

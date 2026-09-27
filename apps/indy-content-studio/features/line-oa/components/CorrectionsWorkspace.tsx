@@ -18,6 +18,7 @@ export function CorrectionsWorkspace() {
   const [connection, setConnection] = useState<ConnectionState>({ status: "loading", maskedRecipient: null, pairedAt: null });
   const [pairingCode, setPairingCode] = useState<PairingCode | null>(null);
   const [isPairing, setIsPairing] = useState(false);
+  const [isConfiguringWebhook, setIsConfiguringWebhook] = useState(false);
   const [isSendingReview, setIsSendingReview] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
@@ -82,6 +83,24 @@ export function CorrectionsWorkspace() {
     }
   }
 
+  async function configureWebhook() {
+    setIsConfiguringWebhook(true);
+    setError(null);
+    setNotice(null);
+    try {
+      const response = await fetch("/api/line/webhook-settings", { method: "POST" });
+      const result = await response.json() as { configured?: unknown; verified?: unknown; active?: unknown };
+      if (!response.ok || result.configured !== true || result.verified !== true || result.active !== true) {
+        throw new Error("line_webhook_unavailable");
+      }
+      setNotice("LINE webhook ตั้งค่าและตรวจสอบแล้ว พร้อมรับคำสั่งจับคู่จากแชตผู้รับ");
+    } catch {
+      setError("ตั้งค่า LINE webhook ไม่สำเร็จ ตรวจสอบ URL และค่าช่องทาง LINE ใน Vercel");
+    } finally {
+      setIsConfiguringWebhook(false);
+    }
+  }
+
   async function startReview() {
     if (!selectedContent) return;
     const cycleId = `cycle-${selectedContent.id}-${Date.now()}`;
@@ -125,6 +144,7 @@ export function CorrectionsWorkspace() {
       {connection.status === "pairing" && <p role="status">รอการจับคู่ LINE กับบัญชีผู้รับ</p>}
       {lineConnected && <p role="status">เชื่อมต่อ LINE แล้ว: {connection.maskedRecipient ?? "ผู้รับที่จับคู่ไว้"}</p>}
       {connection.status === "disabled" && <p role="status">การเชื่อมต่อ LINE ถูกปิดไว้</p>}
+      <button type="button" onClick={() => void configureWebhook()} disabled={isConfiguringWebhook}>{isConfiguringWebhook ? "กำลังตั้งค่า webhook…" : "ตั้งค่า webhook LINE"}</button>
       {!lineConnected && <button type="button" onClick={() => void createPairingCode()} disabled={isPairing || connection.status === "loading"}>{isPairing ? "กำลังสร้างรหัส…" : "สร้างรหัสจับคู่"}</button>}
       {connection.status === "pairing" && <button type="button" onClick={() => void refreshConnection()}>รีเฟรชสถานะ LINE</button>}
       {pairingCode && <div className="line-pairing-instructions" aria-label="คำแนะนำการจับคู่ LINE">

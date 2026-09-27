@@ -423,6 +423,20 @@ describe("environment-backed media delivery URLs", () => {
 });
 
 describe("signed provider streaming", () => {
+  it("streams a signed private Blob file without exposing storage credentials", async () => {
+    const pathname = "media/asset-1/123e4567-e89b-12d3-a456-426614174000.png";
+    const fileId = `blob:${pathname}`;
+    const streamBlob = vi.fn(async () => new Response("private-bytes", { headers: { "Content-Type": "image/png", "X-Provider-Secret": "hidden" } }));
+    const handler = createMediaProviderHandler({ getClient: () => null, streamBlob, signingSecret, now: () => nowSeconds });
+
+    const response = await handler(signedRequest(fileId), { params: Promise.resolve({ fileId }) });
+
+    expect(response.status).toBe(200);
+    expect(await response.text()).toBe("private-bytes");
+    expect(response.headers.get("x-provider-secret")).toBeNull();
+    expect(streamBlob).toHaveBeenCalledWith({ pathname, range: undefined });
+  });
+
   it("rejects invalid and expired signatures before contacting Drive", async () => {
     const client = fakeClient();
     const handler = createMediaProviderHandler({

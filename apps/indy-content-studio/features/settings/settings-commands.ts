@@ -33,9 +33,35 @@ export function setCategoryApprovalRequired(state: DashboardState, id: string, r
   return { ...state, categories: state.categories.map((item) => item.id === id ? { ...item, requiresApproval } : item) };
 }
 
-export function deleteCategory(state: DashboardState, id: string): DashboardState {
-  if (state.contents.some((content) => !content.deletedAt && content.categoryId === id)) throw new Error("หมวดนี้มีชิ้นงานใช้อยู่");
-  return { ...state, categories: state.categories.filter((item) => item.id !== id) };
+export function addOwnerOption(state: DashboardState, name: string): DashboardState {
+  const cleaned = cleanName(name);
+  ensureUnique(state.ownerOptions, cleaned, "มีชื่อผู้รับผิดชอบนี้อยู่แล้ว");
+  return { ...state, ownerOptions: [...state.ownerOptions, cleaned] };
+}
+
+export function renameOwnerOption(state: DashboardState, currentName: string, name: string): DashboardState {
+  const cleaned = cleanName(name);
+  if (!state.ownerOptions.includes(currentName)) throw new Error("ไม่พบชื่อผู้รับผิดชอบนี้");
+  ensureUnique(state.ownerOptions.filter((owner) => owner !== currentName), cleaned, "มีชื่อผู้รับผิดชอบนี้อยู่แล้ว");
+  return { ...state, ownerOptions: state.ownerOptions.map((owner) => owner === currentName ? cleaned : owner) };
+}
+
+export function deleteOwnerOption(state: DashboardState, name: string): DashboardState {
+  return { ...state, ownerOptions: state.ownerOptions.filter((owner) => owner !== name) };
+}
+
+export function deleteCategory(state: DashboardState, id: string, now = new Date().toISOString()): DashboardState {
+  const fallback = state.categories.find((item) => item.id !== id);
+  const usesCategory = state.contents.some((content) => content.categoryId === id);
+  if (usesCategory && !fallback) throw new Error("เพิ่มหมวดอื่นก่อนลบหมวดสุดท้าย เพื่อเก็บประเภทของงานเดิมไว้");
+  return {
+    ...state,
+    categories: state.categories.filter((item) => item.id !== id),
+    categoryMonthlyGoals: state.categoryMonthlyGoals.filter((goal) => goal.categoryId !== id),
+    contents: fallback
+      ? state.contents.map((content) => content.categoryId === id ? { ...content, categoryId: fallback.id, updatedAt: now } : content)
+      : state.contents,
+  };
 }
 
 export function addFormat(state: DashboardState, name: string, mediaKind: FormatDefinition["mediaKind"], allowedPlatforms: Platform[], meta: SettingsItemMeta): DashboardState {

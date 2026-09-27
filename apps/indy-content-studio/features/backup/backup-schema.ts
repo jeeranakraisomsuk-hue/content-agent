@@ -14,7 +14,7 @@ export type DashboardImportMode = "merge" | "replace";
 
 export interface DashboardImportPreview {
   mode: DashboardImportMode;
-  counts: { contents: number; media: number; references: number; captionTemplates: number; corrections: number; publicationAttempts: number };
+  counts: { contents: number; actionTasks: number; media: number; references: number; captionTemplates: number; corrections: number; publicationAttempts: number; categoryMonthlyGoals: number };
   skipped: Array<{ collection: string; id: string; reason: string }>;
   warnings: string[];
   omittedMediaFiles: DashboardBackupV1["omittedMediaFiles"];

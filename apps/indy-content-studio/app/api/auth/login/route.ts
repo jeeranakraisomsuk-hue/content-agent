@@ -1,5 +1,6 @@
 import { verifyAdminPassword } from "../../../../features/auth/server/admin-password";
 import { createAdminSessionCookie, createAdminSessionToken } from "../../../../features/auth/server/admin-session";
+import { createMediaUploadCookie } from "../../../../features/media/server/media-upload-authorization";
 
 export async function POST(request: Request): Promise<Response> {
   let input: unknown;
@@ -24,5 +25,10 @@ export async function POST(request: Request): Promise<Response> {
   }
 
   const token = await createAdminSessionToken(secret);
-  return Response.json({ ok: true }, { headers: { "Set-Cookie": createAdminSessionCookie(token), "Cache-Control": "no-store" } });
+  const headers = new Headers({ "Cache-Control": "no-store" });
+  headers.append("Set-Cookie", createAdminSessionCookie(token));
+  if (process.env.INDY_MEDIA_UPLOAD_TOKEN) {
+    headers.append("Set-Cookie", createMediaUploadCookie(process.env.INDY_MEDIA_UPLOAD_TOKEN));
+  }
+  return Response.json({ ok: true }, { headers });
 }

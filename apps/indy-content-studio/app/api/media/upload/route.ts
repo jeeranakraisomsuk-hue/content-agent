@@ -1,9 +1,7 @@
-import { createGoogleDriveMediaClientFromEnvironment } from "../../../../features/media/server/google-drive-media-client";
 import { createMediaUploadAuthorizer } from "../../../../features/media/server/media-upload-authorization";
-import { createMediaUploadHandler } from "../../../../features/media/server/media-upload-handler";
+import { createBlobUploadHandler } from "../../../../features/media/server/blob-upload-handler";
 
-export const POST = createMediaUploadHandler({
-  getClient: () => createGoogleDriveMediaClientFromEnvironment(),
+export const POST = createBlobUploadHandler({
   authorizeUpload: createMediaUploadAuthorizer(),
   allowedOrigin: process.env.APP_PUBLIC_BASE_URL,
 });

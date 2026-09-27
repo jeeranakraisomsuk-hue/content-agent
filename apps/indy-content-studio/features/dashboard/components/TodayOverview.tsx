@@ -56,7 +56,7 @@ export function TodayOverview({ tasks, state, onOpenTask, onResumeLatest, onRetr
       </div>
 
       <div className="today-layout">
-        <div className="today-schedule" aria-live="polite">
+        <div className="today-schedule" role="region" aria-label="กำหนดการวันนี้" tabIndex={0} aria-live="polite">
           {state === "loading" && <p className="overview-state">กำลังเตรียมกำหนดการวันนี้</p>}
           {state === "empty" && <p className="overview-state">ยังไม่มีงานสำหรับวันนี้</p>}
           {state === "error" && (
@@ -78,11 +78,6 @@ export function TodayOverview({ tasks, state, onOpenTask, onResumeLatest, onRetr
             <p className="panel-label">รออนุมัติ</p>
             <strong>{tasks.filter((task) => task.workflowStage?.includes("อนุมัติ")).length}</strong>
             <span>ชิ้นงานที่ต้องตรวจทาน</span>
-          </div>
-          <div className="overview-aside-panel line-readiness">
-            <p className="panel-label">LINE delivery</p>
-            <strong>พร้อมเมื่อมีไฟล์และแคปชัน</strong>
-            <span>ตรวจความพร้อมก่อนส่งทุกครั้ง</span>
           </div>
         </aside>
       </div>

@@ -25,11 +25,17 @@ describe("settings commands", () => {
     expect(setCategoryApprovalRequired(renamed, "new-item", true).categories.find((item) => item.id === "new-item")?.requiresApproval).toBe(true);
   });
 
-  it("blocks deleting a category or format that is in use", () => {
+  it("deletes used categories by reassigning their content and protects in-use formats", () => {
     const state = createEmptyDashboardState();
-    expect(() => deleteCategory({ ...state, contents: [{
+    state.categoryMonthlyGoals.push({ month: "2026-09", categoryId: "category-review", target: 4 });
+    const usedState: typeof state = { ...state, contents: [{
       id: "content-1", title: "งาน", categoryId: "category-review", formatId: "format-video", owner: "ทีม", objective: "awareness", priority: "normal", plannedWorkAt: null, lastWorkedAt: null, readyDate: null, productionStatus: "waiting-shoot", assetIds: [], processSteps: [], caption: "", captionSource: null, schedules: [], referenceIds: [], notes: "", localApproval: "pending", lineReview: { status: "not-sent", activeCycleId: null, reviewCode: null, providerReceipts: [], lastEventAt: null, history: [] }, createdAt: "now", updatedAt: "now", deletedAt: null,
-    }], }, "category-review")).toThrow("หมวดนี้มีชิ้นงานใช้อยู่");
+    }] };
+    const deleted = deleteCategory(usedState, "category-review", meta.now);
+    expect(deleted.categories.some((item) => item.id === "category-review")).toBe(false);
+    expect(deleted.categoryMonthlyGoals).toEqual([]);
+    expect(deleted.contents[0]).toMatchObject({ categoryId: "category-knowledge", updatedAt: meta.now });
+    expect(() => deleteCategory({ ...usedState, categories: usedState.categories.filter((item) => item.id === "category-review") }, "category-review", meta.now)).toThrow("เพิ่มหมวดอื่นก่อนลบหมวดสุดท้าย");
     expect(() => deleteFormat({ ...state, contents: [{
       id: "content-1", title: "งาน", categoryId: "category-review", formatId: "format-video", owner: "ทีม", objective: "awareness", priority: "normal", plannedWorkAt: null, lastWorkedAt: null, readyDate: null, productionStatus: "waiting-shoot", assetIds: [], processSteps: [], caption: "", captionSource: null, schedules: [], referenceIds: [], notes: "", localApproval: "pending", lineReview: { status: "not-sent", activeCycleId: null, reviewCode: null, providerReceipts: [], lastEventAt: null, history: [] }, createdAt: "now", updatedAt: "now", deletedAt: null,
     }], }, "format-video")).toThrow("รูปแบบนี้มีชิ้นงานใช้อยู่");

@@ -1,4 +1,4 @@
-import { NeonDashboardRepository, StaleDashboardStateError } from "../../../features/data/server/neon-dashboard-repository";
+import { ActivePublicationEditError, NeonDashboardRepository, StaleDashboardStateError } from "../../../features/data/server/neon-dashboard-repository";
 import type { DashboardState } from "../../../features/domain/types";
 
 export async function GET(): Promise<Response> {
@@ -19,6 +19,9 @@ export async function PUT(request: Request): Promise<Response> {
   } catch (error) {
     if (error instanceof StaleDashboardStateError) {
       return Response.json({ error: "stale_dashboard_state" }, { status: 409 });
+    }
+    if (error instanceof ActivePublicationEditError) {
+      return Response.json({ error: "publication_locked" }, { status: 409 });
     }
     return Response.json({ error: "dashboard_unavailable" }, { status: 503 });
   }

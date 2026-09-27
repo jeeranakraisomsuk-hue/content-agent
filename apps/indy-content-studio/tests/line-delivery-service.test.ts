@@ -148,6 +148,37 @@ function send(instance: LineDeliveryService, content = contentItem()) {
 }
 
 describe("server-owned LINE delivery", () => {
+  it("sends a saved public HTTPS image URL and caption without Google Drive", async () => {
+    const fetcher = vi.fn<TestFetcher>(async () => new Response("{}", { status: 200 }));
+    const external = mediaAsset({ source: "external", providerFileId: null, externalUrl: "https://cdn.example.test/photo.jpg", externalPreviewUrl: null });
+    const setup = service({ fetcher, media: [external] });
+
+    const result = await send(setup.instance);
+    const request = JSON.parse(String(fetcher.mock.calls[0]?.[1]?.body)) as { messages: Array<{ type: string; originalContentUrl?: string; previewImageUrl?: string; text?: string }> };
+    expect(result.status).toBe("sent");
+    expect(request.messages).toEqual([
+      { type: "image", originalContentUrl: "https://cdn.example.test/photo.jpg", previewImageUrl: "https://cdn.example.test/photo.jpg" },
+      { type: "text", text: "Authoritative caption" },
+    ]);
+  });
+
+  it("uses the saved JPEG preview when sending an external MP4", async () => {
+    const fetcher = vi.fn<TestFetcher>(async () => new Response("{}", { status: 200 }));
+    const external = mediaAsset({ source: "external", mimeType: "video/mp4", providerFileId: null, externalUrl: "https://cdn.example.test/clip.mp4", externalPreviewUrl: "https://cdn.example.test/poster.jpg" });
+    const setup = service({ fetcher, media: [external] });
+
+    expect((await send(setup.instance)).status).toBe("sent");
+    const request = JSON.parse(String(fetcher.mock.calls[0]?.[1]?.body)) as { messages: Array<{ type: string; originalContentUrl?: string; previewImageUrl?: string }> };
+    expect(request.messages[0]).toEqual({ type: "video", originalContentUrl: "https://cdn.example.test/clip.mp4", previewImageUrl: "https://cdn.example.test/poster.jpg" });
+  });
+
+  it("rejects an externally stored URL containing credentials before calling LINE", async () => {
+    const fetcher = vi.fn<TestFetcher>(async () => new Response("{}", { status: 200 }));
+    const external = mediaAsset({ source: "external", providerFileId: null, externalUrl: "https://user:pass@cdn.example.test/photo.jpg" });
+    const setup = service({ fetcher, media: [external] });
+    await expect(send(setup.instance)).rejects.toMatchObject({ code: "asset_not_ready" });
+    expect(fetcher).not.toHaveBeenCalled();
+  });
   it("sends the authoritative image URL and caption without accepting browser payloads", async () => {
     const fetcher = vi.fn<TestFetcher>(async () => new Response("{}", { status: 200 }));
     const setup = service({ fetcher });

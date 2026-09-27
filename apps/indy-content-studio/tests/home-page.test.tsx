@@ -4,24 +4,24 @@ import { HomePage } from "../app/home-page-view";
 import { MemoryDashboardRepository } from "../features/data/memory-dashboard-repository";
 import { createEmptyDashboardState } from "../features/domain/create-empty-state";
 import type { ContentItem } from "../features/domain/types";
+import type { MediaBlobStore } from "../features/media/media-blob-store";
+import { uploadMediaToBlob } from "../features/media/blob-media-upload";
 
-afterEach(() => vi.unstubAllGlobals());
+vi.mock("../features/media/blob-media-upload", () => ({ uploadMediaToBlob: vi.fn() }));
+
+class TestBlobStore implements MediaBlobStore {
+  private readonly blobs = new Map<string, Blob>();
+  async put(id: string, blob: Blob) { this.blobs.set(id, blob); }
+  async get(id: string) { return this.blobs.get(id) ?? null; }
+  async remove(id: string) { this.blobs.delete(id); }
+}
+
+afterEach(() => { vi.unstubAllGlobals(); vi.clearAllMocks(); });
 
 function seededRepository() {
   const now = "2026-09-18T10:00:00.000Z";
   const content: ContentItem = { id: "reels", title: "ตัดต่อคลิป Reels เทคนิคทรงผม", categoryId: "category-knowledge", formatId: "format-video", owner: "ทีมคอนเทนต์", objective: "awareness", priority: "urgent", plannedWorkAt: "10:30", lastWorkedAt: now, readyDate: null, productionStatus: "editing", assetIds: [], processSteps: [], caption: "", captionSource: null, schedules: [], referenceIds: [], notes: "", localApproval: "pending", lineReview: { status: "not-sent", activeCycleId: null, reviewCode: null, providerReceipts: [], lastEventAt: null, history: [] }, createdAt: now, updatedAt: now, deletedAt: null };
   return new MemoryDashboardRepository({ ...createEmptyDashboardState(), contents: [content] });
-}
-
-function sendableRepository() {
-  const now = "2026-09-22T12:00:00.000Z";
-  const content: ContentItem = { id: "sendable-post", title: "พร้อมส่งโพสต์", categoryId: "category-knowledge", formatId: "format-video", owner: "ทีมคอนเทนต์", objective: "awareness", priority: "urgent", plannedWorkAt: "10:30", lastWorkedAt: now, readyDate: null, productionStatus: "ready", assetIds: ["ready-image"], processSteps: [], caption: "แคปชันจากข้อมูลจริง", captionSource: null, schedules: [], referenceIds: [], notes: "", localApproval: "approved", lineReview: { status: "not-sent", activeCycleId: null, reviewCode: null, providerReceipts: [], lastEventAt: null, history: [] }, createdAt: now, updatedAt: now, deletedAt: null };
-  const repository = new MemoryDashboardRepository({
-    ...createEmptyDashboardState(),
-    contents: [content],
-    media: [{ id: "ready-image", name: "cover.jpg", mimeType: "image/jpeg", size: 1200, source: "upload", externalUrl: null, externalPreviewUrl: null, blobKey: "cover.jpg", remoteStatus: "ready", providerFileId: "drive-cover", previewProviderFileId: null, tags: [], createdAt: now, updatedAt: now, deletedAt: null }],
-  });
-  return { repository, content };
 }
 
 describe("HomePage", () => {
@@ -37,22 +37,92 @@ describe("HomePage", () => {
     expect(screen.getByRole("button", { name: "ดำเนินงานต่อที่ขั้นตอน ตัดต่อ" })).toBeVisible();
   });
 
-  it("keeps newly created task details and assets available in its drawer", () => {
-    render(<HomePage repository={new MemoryDashboardRepository()} />);
-    const asset = new File(["image"], "cover.jpg", { type: "image/jpeg" });
+  it("creates planning work with a date only and without LINE media fields", async () => {
+    const repository = new MemoryDashboardRepository();
+    const { unmount } = render(<HomePage repository={repository} mediaBlobStore={new TestBlobStore()} />);
 
     fireEvent.click(screen.getByRole("button", { name: "สร้างชิ้นงานใหม่" }));
-    fireEvent.change(screen.getByLabelText("ชื่อชิ้นงาน"), { target: { value: "รีวิวสินค้าใหม่" } });
-    fireEvent.change(screen.getByLabelText("แคปชัน"), { target: { value: "พร้อมเผยแพร่" } });
-    fireEvent.change(screen.getByLabelText("กำหนดเวลา"), { target: { value: "2026-09-18T14:30" } });
-    fireEvent.change(screen.getByLabelText("ไฟล์แนบ"), { target: { files: [asset] } });
+    expect(screen.queryByLabelText("ไฟล์แนบ")).not.toBeInTheDocument();
+    expect(screen.queryByLabelText("แคปชัน")).not.toBeInTheDocument();
+    fireEvent.change(screen.getByLabelText("ชื่อชิ้นงาน"), { target: { value: "งานตามแผน" } });
+    fireEvent.change(screen.getByLabelText("วันที่ลงในปฏิทิน"), { target: { value: "2026-09-23" } });
     fireEvent.click(screen.getByRole("button", { name: "สร้างงาน" }));
 
-    const drawer = screen.getByRole("dialog", { name: "รายละเอียด รีวิวสินค้าใหม่" });
-    expect(drawer).toBeVisible();
-    expect(within(drawer).getByText("cover.jpg")).toBeVisible();
-    expect(within(drawer).getByText("พร้อมเผยแพร่")).toBeVisible();
-    expect(within(drawer).getByText("2026-09-18T14:30")).toBeVisible();
+    await waitFor(async () => {
+      const state = await repository.read();
+      expect(state.contents[0]).toMatchObject({ title: "งานตามแผน", plannedWorkAt: "2026-09-23", caption: "", assetIds: [] });
+      expect(state.contents[0].processSteps).toEqual([{ id: expect.any(String), name: "เตรียมงาน", scheduledDate: "2026-09-23", status: "todo", order: 0 }]);
+    });
+    expect(screen.queryByRole("dialog", { name: /รายละเอียดงาน/ })).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "ปฏิทินคอนเทนต์" }));
+    const dayCell = await screen.findByLabelText("2026-09-23");
+    expect(within(dayCell).getByText("งานตามแผน")).toBeVisible();
+    fireEvent.click(screen.getByRole("button", { name: "Action Plan" }));
+    fireEvent.change(screen.getByLabelText("วันที่อ้างอิง"), { target: { value: "2026-09-23" } });
+    expect(await screen.findByRole("checkbox", { name: "ทำเสร็จ เตรียมงาน — งานตามแผน" })).toBeVisible();
+    unmount();
+  });
+
+  it("creates work with the categories and formats configured in Settings", async () => {
+    const state = createEmptyDashboardState();
+    state.categories.push({ id: "category-behind", name: "เบื้องหลัง", requiresApproval: false });
+    state.formats.push({ id: "format-vertical", name: "คลิปแนวตั้ง", mediaKind: "video", allowedPlatforms: ["facebook", "instagram", "tiktok"] });
+    const repository = new MemoryDashboardRepository(state);
+    render(<HomePage repository={repository} />);
+
+    fireEvent.click(screen.getByRole("button", { name: "สร้างชิ้นงานใหม่" }));
+    fireEvent.change(await screen.findByLabelText("ชื่อชิ้นงาน"), { target: { value: "คลิปเบื้องหลัง" } });
+    fireEvent.change(screen.getByLabelText("ประเภทคอนเทนต์"), { target: { value: "เบื้องหลัง" } });
+    fireEvent.change(screen.getByLabelText("รูปแบบการนำเสนอ"), { target: { value: "คลิปแนวตั้ง" } });
+    fireEvent.click(screen.getByRole("button", { name: "สร้างงาน" }));
+
+    await waitFor(async () => expect((await repository.read()).contents[0]).toMatchObject({
+      title: "คลิปเบื้องหลัง", categoryId: "category-behind", formatId: "format-vertical",
+    }));
+  });
+
+  it("saves a generic LINE item first, then sends only its saved ID and revision", async () => {
+    const repository = new MemoryDashboardRepository();
+    const blobStore = new TestBlobStore();
+    vi.mocked(uploadMediaToBlob).mockResolvedValue({ remoteStatus: "ready", providerFileId: "blob:media/cover.jpg", previewProviderFileId: "blob:media/cover.jpg" });
+    const fetcher = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input);
+      if (url === "/api/line/pairing") return Response.json({ status: "connected", maskedRecipient: "••••cdef" });
+      if (url === "/api/integrations/health") return Response.json({ integrations: [{ provider: "blob", status: "connected" }] });
+      if (url === "/api/line/send") return Response.json({ delivery: { id: "delivery-created", status: "sent", sentAt: "2026-09-23T01:00:00.000Z", errorCategory: null } });
+      throw new Error(`Unexpected request: ${url}`);
+    });
+    vi.stubGlobal("fetch", fetcher);
+
+    render(<HomePage repository={repository} mediaBlobStore={blobStore} />);
+    await waitFor(() => expect(fetcher).toHaveBeenCalledWith("/api/line/pairing", { cache: "no-store" }));
+    fireEvent.click(screen.getByRole("button", { name: "ส่งงานใน LINE" }));
+    expect(await screen.findByRole("dialog", { name: "ส่งงานใน LINE" })).toBeVisible();
+    fireEvent.change(screen.getByLabelText("แคปชัน"), { target: { value: "แคปชันสำหรับ LINE" } });
+    fireEvent.change(screen.getByLabelText("วันที่ลง"), { target: { value: "2026-09-25" } });
+    const file = new File(["image"], "cover.jpg", { type: "image/jpeg" });
+    fireEvent.change(screen.getByLabelText("ไฟล์รูปหรือคลิป"), { target: { files: [file] } });
+    const uploadButton = await screen.findByRole("button", { name: "อัปโหลดไฟล์และตรวจสอบก่อนส่ง" });
+    await waitFor(() => expect(uploadButton).toBeEnabled());
+    fireEvent.click(uploadButton);
+
+    const confirmation = await screen.findByRole("dialog", { name: "ยืนยันการส่งเข้า LINE OA" });
+    expect(confirmation).toBeVisible();
+    await waitFor(async () => {
+      const state = await repository.read();
+      expect(state.contents[0]).toMatchObject({ title: "ส่ง LINE · 2026-09-25", plannedWorkAt: "2026-09-25", caption: "แคปชันสำหรับ LINE", categoryId: "category-knowledge", formatId: "format-image", assetIds: [state.media[0].id] });
+      expect(state.media[0]).toMatchObject({ remoteStatus: "ready", providerFileId: "blob:media/cover.jpg" });
+    });
+    expect(await blobStore.get((await repository.read()).media[0].id)).toBe(file);
+    const expectedRevision = (await repository.read()).contents[0];
+    fireEvent.click(screen.getByRole("button", { name: "ยืนยันส่ง" }));
+    expect(await screen.findByText(/Delivery ID: delivery-created/)).toBeVisible();
+    expect(uploadMediaToBlob).toHaveBeenCalledWith(expect.objectContaining({ name: "cover.jpg", blob: file }));
+    const saved = (await repository.read()).contents[0];
+    expect(fetcher).toHaveBeenCalledWith("/api/line/send", expect.objectContaining({
+      method: "POST",
+      body: JSON.stringify({ contentId: saved.id, expectedUpdatedAt: expectedRevision.updatedAt }),
+    }));
   });
 
   it("opens the working calendar workspace from the rail", async () => {
@@ -65,29 +135,65 @@ describe("HomePage", () => {
     expect(screen.getByRole("button", { name: "ปฏิทินคอนเทนต์" })).toHaveAttribute("aria-current", "page");
   });
 
-  it("sends only the saved content ID and revision, and never marks a review sent locally", async () => {
-    const { repository, content } = sendableRepository();
-    const fetcher = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+  it("does not offer the LINE upload action when Blob health reports disconnected", async () => {
+    const repository = new MemoryDashboardRepository();
+    const fetcher = vi.fn(async (input: RequestInfo | URL) => {
       const url = String(input);
-      if (url === "/api/line/pairing") return Response.json({ status: "connected", maskedRecipient: "••••cdef", pairedAt: content.updatedAt });
-      if (url === "/api/line/send") return Response.json({ delivery: { id: "00000000-0000-4000-8000-000000000001", status: "sent", sentAt: "2026-09-22T12:01:00.000Z", errorCategory: null } });
-      throw new Error(`Unexpected request: ${url} ${init?.method ?? "GET"}`);
+      if (url === "/api/line/pairing") return Response.json({ status: "connected", maskedRecipient: "••••cdef" });
+      if (url === "/api/integrations/health") return Response.json({ integrations: [{ provider: "blob", status: "disconnected", category: "configuration" }] });
+      throw new Error(`Unexpected request: ${url}`);
     });
     vi.stubGlobal("fetch", fetcher);
 
     render(<HomePage repository={repository} />);
-    fireEvent.click(await screen.findByRole("button", { name: /พร้อมส่งโพสต์/ }));
-    fireEvent.click(screen.getByRole("button", { name: "ส่งเข้า LINE OA" }));
-    expect(await screen.findByText("••••cdef")).toBeVisible();
-    fireEvent.click(screen.getByRole("button", { name: "ยืนยันส่ง" }));
+    fireEvent.click(screen.getByRole("button", { name: "ส่งงานใน LINE" }));
 
-    await waitFor(() => expect(fetcher).toHaveBeenCalledWith("/api/line/send", expect.objectContaining({
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ contentId: content.id, expectedUpdatedAt: content.updatedAt }),
-    })));
-    expect(await screen.findByText(/delivery ID.*00000000-0000-4000-8000-000000000001/i)).toBeVisible();
-    expect((await repository.read()).contents[0].lineReview.status).toBe("not-sent");
+    expect(await screen.findByText(/Vercel Blob.*ยังไม่พร้อม/)).toBeVisible();
+    expect(screen.getByRole("button", { name: "อัปโหลดไฟล์และตรวจสอบก่อนส่ง" })).toBeDisabled();
+    expect((await repository.read()).media).toHaveLength(0);
+    expect(fetcher).not.toHaveBeenCalledWith("/api/media/upload", expect.anything());
+  });
+
+  it("creates and saves a task from the calendar using the shared creation modal", async () => {
+    const repository = new MemoryDashboardRepository();
+    render(<HomePage repository={repository} />);
+
+    fireEvent.click(screen.getByRole("button", { name: "ปฏิทินคอนเทนต์" }));
+    fireEvent.click(await screen.findByRole("button", { name: "สร้างชิ้นงานใหม่" }));
+    expect(await screen.findByRole("dialog", { name: "สร้างคอนเทนต์" })).toBeVisible();
+
+    fireEvent.change(screen.getByLabelText("ชื่อชิ้นงาน"), { target: { value: "งานจากปฏิทิน" } });
+    fireEvent.click(screen.getByRole("button", { name: "สร้างงาน" }));
+
+    await waitFor(async () => expect((await repository.read()).contents.map((content) => content.title)).toContain("งานจากปฏิทิน"));
+    expect(screen.queryByRole("dialog", { name: "สร้างคอนเทนต์" })).not.toBeInTheDocument();
+  });
+
+  it("keeps the generic LINE action separate from ordinary work creation", async () => {
+    const repository = new MemoryDashboardRepository();
+    const fetcher = vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url === "/api/line/pairing") return Response.json({ status: "connected", maskedRecipient: "••••cdef" });
+      throw new Error(`Unexpected request: ${url}`);
+    });
+    vi.stubGlobal("fetch", fetcher);
+
+    render(<HomePage repository={repository} />);
+
+    expect(screen.getByRole("button", { name: "สร้างชิ้นงานใหม่" })).toBeEnabled();
+    fireEvent.click(screen.getByRole("button", { name: "ส่งงานใน LINE" }));
+
+    expect(await screen.findByRole("dialog", { name: "ส่งงานใน LINE" })).toBeVisible();
+    expect(screen.queryByLabelText("ชื่อชิ้นงาน")).not.toBeInTheDocument();
+    expect(fetcher).not.toHaveBeenCalledWith("/api/line/send", expect.anything());
+  });
+
+  it("opens the generic LINE composer even when no task has been selected", async () => {
+    render(<HomePage repository={new MemoryDashboardRepository()} />);
+
+    fireEvent.click(screen.getByRole("button", { name: "ส่งงานใน LINE" }));
+
+    expect(await screen.findByRole("dialog", { name: "ส่งงานใน LINE" })).toBeVisible();
   });
 
   it("shows the existing production board as its own workspace", () => {

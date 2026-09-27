@@ -22,7 +22,7 @@ const safeErrorLabels: Record<string, string> = {
   provider: "บริการ LINE ขัดข้อง ลองใหม่ได้",
   stale_content: "ข้อมูลชิ้นงานเปลี่ยนแล้ว กรุณาปิดและเปิดหน้าต่างนี้ใหม่",
   caption_required: "ต้องมีแคปชันก่อนส่ง",
-  asset_not_ready: "ไฟล์ยังอัปโหลดไปยัง Google Drive ไม่เสร็จ",
+  asset_not_ready: "ไฟล์ยังไม่พร้อมส่งผ่าน LINE",
   preview_missing: "วิดีโอยังไม่มีภาพตัวอย่าง",
 };
 
@@ -113,6 +113,8 @@ export function LineSendConfirmation({ task, open, onCancel, onConfirm, connecte
               <span className="panel-label">ตัวอย่างแคปชัน</span>
               <p>{task.caption}</p>
             </div>
+            {/^\d{4}-\d{2}-\d{2}$/.test(task.scheduledTime) && <div className="line-recipient"><span>วันที่ลงในปฏิทิน</span><strong>{task.scheduledTime}</strong></div>}
+            <p className="line-composer-guidance">วันที่เป็นข้อมูลวางแผนเท่านั้น การกดยืนยันจะส่งเข้า LINE ทันที</p>
             <div className="line-recipient"><span>ผู้รับที่จับคู่ไว้</span><strong>{recipientMasked}</strong></div>
             {sendState === "error" && <p className="line-send-error" role="alert">ส่งไม่สำเร็จ: {safeErrorLabels[errorCategory] ?? "บริการขัดข้อง ลองใหม่ได้"} <span>({errorCategory})</span></p>}
           </>

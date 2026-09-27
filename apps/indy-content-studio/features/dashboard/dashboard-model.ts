@@ -2,6 +2,9 @@ import type {
   ContentItem,
   DashboardState,
   MediaAsset,
+  Platform,
+  PlatformSchedule,
+  ProcessStep,
   ProductionStatus,
 } from "../domain/types";
 
@@ -13,6 +16,7 @@ export interface ContentAsset {
   size: number;
   remoteReady?: boolean;
   previewReady?: boolean;
+  remoteStatus?: "local-only" | "uploading" | "ready" | "failed";
 }
 
 export interface DashboardTask {
@@ -31,6 +35,8 @@ export interface DashboardTask {
   caption?: string;
   notes?: string;
   assets?: ContentAsset[];
+  processSteps?: ProcessStep[];
+  platformSchedules?: Record<Platform, { enabled: boolean; date: string; time: string }>;
 }
 
 const workflowStageByStatus: Record<ProductionStatus, string> = {
@@ -92,7 +98,7 @@ export function dashboardTaskToMedia(task: DashboardTask, now: string): MediaAss
     source: "upload",
     externalUrl: null,
     externalPreviewUrl: null,
-    blobKey: null,
+    blobKey: `asset-${task.id}-${index}`,
     remoteStatus: "local-only",
     providerFileId: null,
     previewProviderFileId: null,
@@ -119,6 +125,16 @@ export function dashboardTaskToContent(
         lastEventAt: null,
         history: [],
       };
+  const existing = state.contents.find((content) => content.id === task.id);
+  const platformSchedules: PlatformSchedule[] | undefined = task.platformSchedules
+    ? (Object.entries(task.platformSchedules) as Array<[Platform, { enabled: boolean; date: string; time: string }]>).map(([platform, value]) => ({
+        platform,
+        enabled: value.enabled,
+        publishAt: value.enabled && value.date && value.time ? `${value.date}T${value.time}:00+07:00` : null,
+        latestAttemptId: null,
+        manualEvidence: null,
+      }))
+    : undefined;
 
   return {
     id: task.id,
@@ -133,10 +149,10 @@ export function dashboardTaskToContent(
     readyDate: plannedWorkAt?.slice(0, 10) ?? null,
     productionStatus: resolveProductionStatus(task.workflowStage),
     assetIds: (task.assets ?? []).map((_, index) => `asset-${task.id}-${index}`),
-    processSteps: [],
+    processSteps: task.processSteps?.map((step) => ({ ...step })) ?? [],
     caption: task.caption ?? "",
     captionSource: null,
-    schedules: [],
+    schedules: platformSchedules ?? existing?.schedules.map((schedule) => ({ ...schedule })) ?? [],
     referenceIds: [],
     notes: task.notes ?? "",
     localApproval: "pending",
@@ -155,8 +171,9 @@ export function dashboardTaskFromContent(content: ContentItem, state: DashboardS
       name: asset.name,
       type: asset.mimeType,
       size: asset.size,
-      remoteReady: asset.remoteStatus === "ready" && Boolean(asset.providerFileId),
-      previewReady: asset.mimeType !== "video/mp4" || Boolean(asset.previewProviderFileId),
+      remoteReady: asset.remoteStatus === "ready" && Boolean(asset.providerFileId || (asset.source === "external" && asset.externalUrl)),
+      previewReady: asset.mimeType !== "video/mp4" || Boolean(asset.previewProviderFileId || (asset.source === "external" && asset.externalPreviewUrl)),
+      remoteStatus: asset.remoteStatus,
     }));
 
   return {
@@ -175,6 +192,12 @@ export function dashboardTaskFromContent(content: ContentItem, state: DashboardS
     caption: content.caption,
     notes: content.notes,
     assets,
+    processSteps: content.processSteps.map((step) => ({ ...step })),
+    platformSchedules: Object.fromEntries((content.schedules.length ? content.schedules : [
+      { platform: "facebook" as const, enabled: false, publishAt: null, latestAttemptId: null, manualEvidence: null },
+      { platform: "instagram" as const, enabled: false, publishAt: null, latestAttemptId: null, manualEvidence: null },
+      { platform: "tiktok" as const, enabled: false, publishAt: null, latestAttemptId: null, manualEvidence: null },
+    ]).map((schedule) => [schedule.platform, { enabled: schedule.enabled, date: schedule.publishAt?.slice(0, 10) ?? "", time: schedule.publishAt?.slice(11, 16) ?? "09:00" }])) as DashboardTask["platformSchedules"],
   };
 }
 

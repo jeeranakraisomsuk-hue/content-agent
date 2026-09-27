@@ -7,6 +7,7 @@ import type {
 } from "./types";
 
 const allPlatforms: Platform[] = ["facebook", "instagram", "tiktok"];
+export const DEFAULT_OWNER_OPTIONS = ["colofill", "Misschilli"] as const;
 
 function createCategories(): Category[] {
   return [
@@ -30,6 +31,7 @@ function createIntegrations(): IntegrationStatus[] {
     "database",
     "google-sheets",
     "google-drive",
+    "blob",
     "line",
     "make",
     "tiktok",
@@ -47,13 +49,16 @@ export function createEmptyDashboardState(): DashboardState {
   return {
     schemaVersion: 1,
     contents: [],
+    actionTasks: [],
     media: [],
     categories: createCategories(),
     formats: createFormats(),
+    ownerOptions: [...DEFAULT_OWNER_OPTIONS],
     references: [],
     captionTemplates: [],
     corrections: [],
     monthlyGoals: [],
+    categoryMonthlyGoals: [],
     publicationAttempts: [],
     integrations: createIntegrations(),
     notificationReadIds: [],

@@ -1,2 +1,109 @@
-import { render, screen } from "@testing-library/react"; import { describe, expect, it } from "vitest"; import { DashboardDataProvider } from "../features/data/DashboardDataProvider"; import { MemoryDashboardRepository } from "../features/data/memory-dashboard-repository"; import { ActionPlanWorkspace } from "../features/action-plan/components/ActionPlanWorkspace";
-describe("ActionPlanWorkspace", () => { it("shows view modes and unscheduled section", async () => { render(<DashboardDataProvider repository={new MemoryDashboardRepository()}><ActionPlanWorkspace /></DashboardDataProvider>); expect(await screen.findByLabelText("วันที่อ้างอิง")).toBeVisible(); expect(screen.getByText("ยังไม่กำหนดวัน")).toBeVisible(); }); });
+import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { describe, expect, it } from "vitest";
+import { ActionPlanWorkspace } from "../features/action-plan/components/ActionPlanWorkspace";
+import { DashboardDataProvider } from "../features/data/DashboardDataProvider";
+import { MemoryDashboardRepository } from "../features/data/memory-dashboard-repository";
+import { createEmptyDashboardState } from "../features/domain/create-empty-state";
+
+function createRepository() {
+  const state = createEmptyDashboardState();
+  state.contents.push({
+    id: "content-1", title: "ถ่ายคลิป", categoryId: "category-knowledge", formatId: "format-video",
+    owner: "ทีม", objective: "awareness", priority: "normal", plannedWorkAt: null,
+    lastWorkedAt: null, readyDate: null, productionStatus: "waiting-shoot", assetIds: [],
+    processSteps: [
+      { id: "step-1", name: "ตัดต่อ", scheduledDate: "2026-09-24", status: "todo", order: 0 },
+      { id: "step-2", name: "เตรียมภาพ", scheduledDate: null, status: "todo", order: 1 },
+    ],
+    caption: "", captionSource: null, schedules: [], referenceIds: [], notes: "",
+    localApproval: "pending", lineReview: { status: "not-sent", activeCycleId: null, reviewCode: null,
+      providerReceipts: [], lastEventAt: null, history: [] }, createdAt: "now", updatedAt: "now", deletedAt: null,
+  });
+  return new MemoryDashboardRepository(state);
+}
+
+describe("ActionPlanWorkspace", () => {
+  it("opens a My Day list with suggestions beside it", async () => {
+    render(<DashboardDataProvider repository={createRepository()}><ActionPlanWorkspace /></DashboardDataProvider>);
+    fireEvent.change(await screen.findByLabelText("วันที่อ้างอิง"), { target: { value: "2026-09-24" } });
+
+    expect(screen.getByRole("heading", { name: "วันของฉัน" })).toBeVisible();
+    expect(screen.getByRole("region", { name: "งานของวันที่เลือก" })).toContainElement(
+      screen.getByRole("checkbox", { name: "ทำเสร็จ ตัดต่อ — ถ่ายคลิป" }),
+    );
+    expect(screen.getByRole("region", { name: "คำแนะนำ" })).toBeVisible();
+    expect(screen.getByRole("button", { name: "เพิ่มเข้าวันนี้ เตรียมภาพ — ถ่ายคลิป" })).toBeVisible();
+    expect(screen.queryByRole("grid", { name: "ปฏิทิน Action Plan" })).not.toBeInTheDocument();
+  });
+
+  it("adds a suggested step to My Day and keeps checklist changes persisted", async () => {
+    const repository = createRepository();
+    render(<DashboardDataProvider repository={repository}><ActionPlanWorkspace /></DashboardDataProvider>);
+    fireEvent.change(await screen.findByLabelText("วันที่อ้างอิง"), { target: { value: "2026-09-24" } });
+    fireEvent.click(screen.getByRole("button", { name: "เพิ่มเข้าวันนี้ เตรียมภาพ — ถ่ายคลิป" }));
+
+    const checkbox = await screen.findByRole("checkbox", { name: "ทำเสร็จ เตรียมภาพ — ถ่ายคลิป" });
+    expect((await repository.read()).contents[0].processSteps[1].scheduledDate).toBe("2026-09-24");
+    fireEvent.click(checkbox);
+    await waitFor(() => expect(checkbox).toBeChecked());
+    expect(checkbox.closest(".action-step-row")).toHaveClass("is-done");
+  });
+
+  it("quick-adds an independent Action Plan task without creating content", async () => {
+    const repository = createRepository();
+    render(<DashboardDataProvider repository={repository}><ActionPlanWorkspace /></DashboardDataProvider>);
+    fireEvent.change(await screen.findByLabelText("วันที่อ้างอิง"), { target: { value: "2026-09-24" } });
+    fireEvent.change(screen.getByRole("textbox", { name: "เพิ่มงานทั่วไป" }), { target: { value: "ตรวจงานใหม่" } });
+    fireEvent.click(screen.getByRole("button", { name: "เพิ่มงาน" }));
+
+    const checkbox = await screen.findByRole("checkbox", { name: "ทำเสร็จ ตรวจงานใหม่" });
+    expect(checkbox).toBeVisible();
+    const saved = await repository.read();
+    expect(saved.actionTasks).toEqual([expect.objectContaining({ title: "ตรวจงานใหม่", scheduledDate: "2026-09-24", status: "todo" })]);
+    expect(saved.contents.some((content) => content.title === "ตรวจงานใหม่")).toBe(false);
+    fireEvent.click(checkbox);
+    await waitFor(() => expect(checkbox).toBeChecked());
+    expect((await repository.read()).actionTasks[0].status).toBe("done");
+  });
+
+  it("shows a compact seven-day calendar and selects a day for its checklist", async () => {
+    render(<DashboardDataProvider repository={createRepository()}><ActionPlanWorkspace /></DashboardDataProvider>);
+    fireEvent.change(await screen.findByLabelText("วันที่อ้างอิง"), { target: { value: "2026-09-24" } });
+    fireEvent.click(screen.getByRole("button", { name: "สัปดาห์" }));
+
+    expect(screen.getByRole("grid", { name: "ปฏิทิน Action Plan" })).toBeVisible();
+    expect(within(screen.getByRole("grid")).getAllByRole("button", { name: /เลือกวันที่/ })).toHaveLength(7);
+    fireEvent.click(screen.getByRole("button", { name: "เลือกวันที่ 2026-09-24" }));
+    expect(screen.getByRole("checkbox", { name: "ทำเสร็จ ตัดต่อ — ถ่ายคลิป" })).not.toBeChecked();
+    expect(screen.getByText("ยังไม่กำหนดวัน")).toBeVisible();
+  });
+
+  it("checks a step, turns it green, persists it, and can undo the check", async () => {
+    const repository = createRepository();
+    render(<DashboardDataProvider repository={repository}><ActionPlanWorkspace /></DashboardDataProvider>);
+    fireEvent.change(await screen.findByLabelText("วันที่อ้างอิง"), { target: { value: "2026-09-24" } });
+    fireEvent.click(screen.getByRole("button", { name: "สัปดาห์" }));
+    fireEvent.click(screen.getByRole("button", { name: "เลือกวันที่ 2026-09-24" }));
+
+    const checkbox = screen.getByRole("checkbox", { name: "ทำเสร็จ ตัดต่อ — ถ่ายคลิป" });
+    fireEvent.click(checkbox);
+    await waitFor(() => expect(checkbox).toBeChecked());
+    expect(checkbox.closest(".action-step-row")).toHaveClass("is-done");
+    expect(screen.getByRole("button", { name: "เลือกวันที่ 2026-09-24" })).toHaveClass("has-done");
+    expect((await repository.read()).contents[0].processSteps[0].status).toBe("done");
+
+    fireEvent.click(checkbox);
+    await waitFor(() => expect(checkbox).not.toBeChecked());
+    expect((await repository.read()).contents[0].processSteps[0].status).toBe("todo");
+  });
+
+  it("shows a month grid and opens the selected day's checklist", async () => {
+    render(<DashboardDataProvider repository={createRepository()}><ActionPlanWorkspace /></DashboardDataProvider>);
+    fireEvent.change(await screen.findByLabelText("วันที่อ้างอิง"), { target: { value: "2026-09-24" } });
+    fireEvent.click(screen.getByRole("button", { name: "เดือน" }));
+
+    expect(within(screen.getByRole("grid")).getAllByRole("button", { name: /เลือกวันที่/ })).toHaveLength(30);
+    fireEvent.click(screen.getByRole("button", { name: "เลือกวันที่ 2026-09-24" }));
+    expect(screen.getByRole("checkbox", { name: "ทำเสร็จ ตัดต่อ — ถ่ายคลิป" })).toBeVisible();
+  });
+});

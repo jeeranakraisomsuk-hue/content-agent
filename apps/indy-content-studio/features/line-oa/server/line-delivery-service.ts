@@ -84,6 +84,16 @@ function deliveryView(row: DeliveryRow): DeliveryView {
   };
 }
 
+function safeExternalUrl(value: string | null): string | null {
+  if (!value) return null;
+  try {
+    const parsed = new URL(value);
+    return parsed.protocol === "https:" && !parsed.username && !parsed.password ? parsed.toString() : null;
+  } catch {
+    return null;
+  }
+}
+
 function findContentAndAsset(state: DashboardState, contentId: string, expectedUpdatedAt: string): [ContentItem, MediaAsset] {
   const content = state.contents.find((item) => item.id === contentId && !item.deletedAt);
   if (!content) throw new LineDeliveryError("content_not_found");
@@ -94,11 +104,14 @@ function findContentAndAsset(state: DashboardState, contentId: string, expectedU
   const asset = content.assetIds
     .map((assetId) => mediaById.get(assetId))
     .find((candidate) => candidate && !candidate.deletedAt && candidate.remoteStatus === "ready");
-  if (!asset || !asset.providerFileId) throw new LineDeliveryError("asset_not_ready");
+  if (!asset || (!asset.providerFileId && !(asset.source === "external" && safeExternalUrl(asset.externalUrl)))) {
+    throw new LineDeliveryError("asset_not_ready");
+  }
   if (asset.mimeType !== "image/jpeg" && asset.mimeType !== "image/png" && asset.mimeType !== "video/mp4") {
     throw new LineDeliveryError("asset_unsupported");
   }
-  if (asset.mimeType === "video/mp4" && !asset.previewProviderFileId) {
+  if (asset.mimeType === "video/mp4" && !asset.previewProviderFileId
+    && !(asset.source === "external" && safeExternalUrl(asset.externalPreviewUrl))) {
     throw new LineDeliveryError("preview_missing");
   }
   return [content, asset];
@@ -172,18 +185,25 @@ export class LineDeliveryService {
     }
 
     try {
-      const previewProviderFileId = asset.mimeType === "video/mp4" ? asset.previewProviderFileId! : asset.providerFileId!;
       let signedUrls: ReturnType<typeof createProviderMediaDeliveryUrls>;
-      try {
-        signedUrls = createProviderMediaDeliveryUrls({
-          providerFileId: asset.providerFileId!,
-          previewProviderFileId,
-          environment: this.environment,
-          now: () => Math.floor(createdAt / 1_000),
-          ttlSeconds: MEDIA_URL_TTL_SECONDS,
-        });
-      } catch {
-        throw new LineDeliveryError("configuration");
+      if (asset.source === "external") {
+        const original = safeExternalUrl(asset.externalUrl);
+        const preview = asset.mimeType === "video/mp4" ? safeExternalUrl(asset.externalPreviewUrl) : original;
+        if (!original || !preview) throw new LineDeliveryError("asset_not_ready");
+        signedUrls = { originalContentUrl: original, previewImageUrl: preview };
+      } else {
+        const previewProviderFileId = asset.mimeType === "video/mp4" ? asset.previewProviderFileId! : asset.providerFileId!;
+        try {
+          signedUrls = createProviderMediaDeliveryUrls({
+            providerFileId: asset.providerFileId!,
+            previewProviderFileId,
+            environment: this.environment,
+            now: () => Math.floor(createdAt / 1_000),
+            ttlSeconds: MEDIA_URL_TTL_SECONDS,
+          });
+        } catch {
+          throw new LineDeliveryError("configuration");
+        }
       }
       const messages = buildLineMessages({
         media: asset.mimeType === "video/mp4"

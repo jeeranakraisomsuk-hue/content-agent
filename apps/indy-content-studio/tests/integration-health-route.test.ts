@@ -3,6 +3,14 @@ import { GET } from "../app/api/integrations/health/route";
 import { defaultIntegrationHealthChecks, getIntegrationHealth } from "../features/integrations/server/integration-health";
 
 describe("integration health", () => {
+  it("reports Blob storage ready without Google service-account credentials", async () => {
+    const checks = defaultIntegrationHealthChecks({ BLOB_STORE_ID: "store-test" }, {
+      probeBlobStorage: async () => true,
+    });
+    const [blob] = await getIntegrationHealth(checks.filter((check) => check.provider === "blob"), { cache: new Map() });
+    expect(blob).toMatchObject({ provider: "blob", status: "connected", category: "ok" });
+  });
+
   it("returns safe disconnected status without leaking configuration", async () => {
     const response = await GET();
     const payload = await response.json();
@@ -60,6 +68,13 @@ describe("integration health", () => {
     const [line] = await getIntegrationHealth(checks.filter((check) => check.provider === "line"), { cache: new Map() });
     expect(line).toMatchObject({ status: "disconnected", category: "configuration" });
     expect(fetcher).not.toHaveBeenCalled();
+  });
+
+  it("requires both Make webhook and bearer token", async () => {
+    const [missingWebhook] = await getIntegrationHealth(defaultIntegrationHealthChecks({ MAKE_API_TOKEN: "token" }).filter((check) => check.provider === "make"), { cache: new Map() });
+    const [configured] = await getIntegrationHealth(defaultIntegrationHealthChecks({ MAKE_API_TOKEN: "token", MAKE_PUBLICATION_WEBHOOK_URL: "https://make.example/webhook" }).filter((check) => check.provider === "make"), { cache: new Map() });
+    expect(missingWebhook).toMatchObject({ status: "disconnected", category: "configuration" });
+    expect(configured).toMatchObject({ status: "connected", category: "ok" });
   });
 
   it("bounds slow probes, reports a safe timeout category, and does not cache failures", async () => {

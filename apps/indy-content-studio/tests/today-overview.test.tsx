@@ -43,6 +43,12 @@ describe("TodayOverview", () => {
     expect(resumeLatest).toHaveBeenCalledOnce();
   });
 
+  it("does not show the extra LINE delivery readiness panel", () => {
+    render(<TodayOverview tasks={tasks} state="ready" onOpenTask={vi.fn()} onResumeLatest={vi.fn()} onRetry={vi.fn()} />);
+    expect(screen.queryByText("LINE delivery")).not.toBeInTheDocument();
+    expect(screen.queryByText("ตรวจความพร้อมก่อนส่งทุกครั้ง")).not.toBeInTheDocument();
+  });
+
   it.each([
     ["loading", "กำลังเตรียมกำหนดการวันนี้"],
     ["empty", "ยังไม่มีงานสำหรับวันนี้"],

@@ -13,6 +13,13 @@ export class StaleDashboardStateError extends Error {
   }
 }
 
+export class ActivePublicationEditError extends Error {
+  constructor() {
+    super("Publication payload is locked while Make is processing it");
+    this.name = "ActivePublicationEditError";
+  }
+}
+
 export interface DashboardSnapshot {
   state: DashboardState;
   version: number;
@@ -44,12 +51,30 @@ export class NeonDashboardRepository {
 
   async saveDashboardState(state: DashboardState, expectedVersion: number): Promise<{ version: number }> {
     const validated = validateState(state);
+    const currentSnapshot = await this.loadDashboardState();
+    assertNoActivePublicationPayloadEdit(currentSnapshot.state, validated);
     const rows = await this.execute(
       "UPDATE dashboard_snapshots SET state = $2, version = version + 1, updated_at = now() WHERE workspace_key = $1 AND version = $3 RETURNING version",
       [WORKSPACE_KEY, validated, expectedVersion],
     );
     if (rows.length === 0) throw new StaleDashboardStateError();
     return { version: numericVersion(rows[0].version) };
+  }
+}
+
+function assertNoActivePublicationPayloadEdit(previous: DashboardState, next: DashboardState): void {
+  const activeStatuses = new Set(["submitting", "queued", "publishing"]);
+  for (const attempt of previous.publicationAttempts) {
+    if (!activeStatuses.has(attempt.status)) continue;
+    const nextAttempt = next.publicationAttempts.find((candidate) => candidate.id === attempt.id);
+    if (!nextAttempt || !activeStatuses.has(nextAttempt.status)) continue;
+    const oldContent = previous.contents.find((content) => content.id === attempt.contentId);
+    const newContent = next.contents.find((content) => content.id === attempt.contentId);
+    const oldSchedule = oldContent?.schedules.find((schedule) => schedule.platform === attempt.platform);
+    const newSchedule = newContent?.schedules.find((schedule) => schedule.platform === attempt.platform);
+    const oldPayload = JSON.stringify({ caption: oldContent?.caption ?? "", formatId: oldContent?.formatId ?? "", assetIds: oldContent?.assetIds ?? [], publishAt: oldSchedule?.publishAt ?? null, enabled: oldSchedule?.enabled ?? false });
+    const newPayload = JSON.stringify({ caption: newContent?.caption ?? "", formatId: newContent?.formatId ?? "", assetIds: newContent?.assetIds ?? [], publishAt: newSchedule?.publishAt ?? null, enabled: newSchedule?.enabled ?? false });
+    if (oldPayload !== newPayload) throw new ActivePublicationEditError();
   }
 }
 

@@ -1,4 +1,5 @@
 import { createHash } from "node:crypto";
+import { list } from "@vercel/blob";
 import type { IntegrationStatus } from "../../domain/types";
 import { createNeonExecutor, type SqlExecutor } from "../../data/server/neon-client";
 import {
@@ -35,6 +36,7 @@ type HealthDependencies = {
   execute?: SqlExecutor;
   fetcher?: Fetcher;
   createDriveClient?: (environment: Environment, fetcher: Fetcher) => Pick<GoogleDriveMediaClient, "probeStorage"> | null;
+  probeBlobStorage?: (signal?: AbortSignal) => Promise<boolean>;
 };
 
 const DEFAULT_TIMEOUT_MS = 3_000;
@@ -45,8 +47,9 @@ const providerEnv: Record<IntegrationStatus["provider"], string[]> = {
   database: ["DATABASE_URL"],
   "google-sheets": ["GOOGLE_SERVICE_ACCOUNT_EMAIL", "GOOGLE_PRIVATE_KEY"],
   "google-drive": ["GOOGLE_SERVICE_ACCOUNT_EMAIL", "GOOGLE_PRIVATE_KEY", "GOOGLE_DRIVE_FOLDER_ID"],
+  blob: ["BLOB_STORE_ID", "BLOB_READ_WRITE_TOKEN"],
   line: ["LINE_CHANNEL_SECRET", "LINE_CHANNEL_ACCESS_TOKEN"],
-  make: ["MAKE_API_TOKEN"],
+  make: ["MAKE_API_TOKEN", "MAKE_PUBLICATION_WEBHOOK_URL"],
   tiktok: ["TIKTOK_ACCESS_TOKEN"],
   "online-media": ["ONLINE_MEDIA_API_KEY"],
   "ai-caption": ["AI_CAPTION_API_KEY"],
@@ -116,6 +119,21 @@ export function defaultIntegrationHealthChecks(
           const client = createDriveClient(env, fetcher);
           if (!client?.probeStorage) return disconnected("configuration");
           return mapDriveProbe(await client.probeStorage({ signal }));
+        },
+      };
+    }
+
+    if (provider === "blob") {
+      return {
+        provider,
+        cacheKey,
+        check: async (signal) => {
+          if (!env.BLOB_STORE_ID && !env.BLOB_READ_WRITE_TOKEN) return disconnected("configuration");
+          const probe = dependencies.probeBlobStorage ?? (async () => {
+            await list({ limit: 1, abortSignal: signal });
+            return true;
+          });
+          return await probe(signal) ? { status: "connected", category: "ok" } : providerError();
         },
       };
     }

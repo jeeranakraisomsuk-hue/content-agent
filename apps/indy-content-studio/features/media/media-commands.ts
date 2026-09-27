@@ -17,7 +17,7 @@ function nameOf(name: string): string {
 function httpsUrl(url: string, message = "ต้องเป็นลิงก์ https"): string {
   let parsed: URL;
   try { parsed = new URL(url); } catch { throw new Error(message); }
-  if (parsed.protocol !== "https:") throw new Error(message);
+  if (parsed.protocol !== "https:" || parsed.username || parsed.password) throw new Error(message);
   return parsed.toString();
 }
 
@@ -35,7 +35,7 @@ export function createExternalMedia(state: DashboardState, input: { id: string; 
   const isVideo = input.mimeType.toLowerCase().startsWith("video/");
   if (isVideo && !input.externalPreviewUrl) throw new Error("วิดีโอต้องมีลิงก์ภาพตัวอย่าง https");
   const externalPreviewUrl = input.externalPreviewUrl ? httpsUrl(input.externalPreviewUrl, "วิดีโอต้องมีลิงก์ภาพตัวอย่าง https") : null;
-  const asset = { ...baseAsset({ id: input.id, name: input.name, mimeType: input.mimeType, size: 0, now: input.now, tags: input.tags, source: "external" }), externalUrl, externalPreviewUrl, blobKey: null };
+  const asset = { ...baseAsset({ id: input.id, name: input.name, mimeType: input.mimeType, size: 0, now: input.now, tags: input.tags, source: "external" }), externalUrl, externalPreviewUrl, blobKey: null, remoteStatus: "ready" as const };
   return { ...state, media: [...state.media, asset] };
 }
 

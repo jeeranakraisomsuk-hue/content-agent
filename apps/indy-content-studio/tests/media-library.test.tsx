@@ -14,6 +14,28 @@ vi.mock("../features/media/video-poster", () => ({
   createVideoPoster: vi.fn(async () => new Blob(["poster"], { type: "image/jpeg" })),
 }));
 
+vi.mock("../features/media/blob-media-upload", () => ({
+  uploadMediaToBlob: vi.fn(async ({ assetId, name, mimeType, blob }: { assetId: string; name: string; mimeType: string; blob: Blob }) => {
+    const health = await fetch("/api/integrations/health", { cache: "no-store" });
+    const payload = await health.json();
+    if (!payload.integrations?.some((item: { provider: string; status: string }) => item.provider === "blob" && item.status === "connected")) {
+      return { remoteStatus: "local-only" as const };
+    }
+    const file = new File([blob], name, { type: mimeType });
+    const form = new FormData();
+    form.set("assetId", assetId);
+    form.set("file", file);
+    if (mimeType.startsWith("video/") || /\.mp4$/i.test(name)) {
+      const poster = await createVideoPoster(file);
+      form.set("preview", new File([poster], `${name.replace(/\.[^.]+$/, "")}-poster.jpg`, { type: "image/jpeg" }));
+    }
+    const response = await fetch("/api/media/upload", { method: "POST", body: form });
+    if (response.status === 503) return { remoteStatus: "local-only" as const };
+    if (!response.ok) throw new Error("provider-upload-failed");
+    return await response.json();
+  }),
+}));
+
 class TestBlobStore implements MediaBlobStore {
   private readonly blobs = new Map<string, Blob>();
   async put(id: string, blob: Blob) { this.blobs.set(id, blob); }
@@ -22,7 +44,7 @@ class TestBlobStore implements MediaBlobStore {
 }
 
 function integrationHealth(status: "connected" | "disconnected" = "connected") {
-  return Response.json({ integrations: [{ provider: "google-drive", status, checkedAt: "2026-09-18T00:00:00.000Z", message: status === "connected" ? "เชื่อมต่อแล้ว" : "ยังไม่ได้เชื่อมต่อ" }] });
+  return Response.json({ integrations: [{ provider: "blob", status, checkedAt: "2026-09-18T00:00:00.000Z", message: status === "connected" ? "เชื่อมต่อแล้ว" : "ยังไม่ได้เชื่อมต่อ" }] });
 }
 
 function renderLibrary(
@@ -84,7 +106,7 @@ describe("MediaLibraryWorkspace", () => {
     expect(asset.remoteStatus).toBe("local-only");
     expect(await blobStore.get(asset.id)).toBe(file);
     expect(fetcher).toHaveBeenCalledOnce();
-    expect(fetcher).toHaveBeenCalledWith("/api/integrations/health");
+    expect(fetcher).toHaveBeenCalledWith("/api/integrations/health", { cache: "no-store" });
     expect(createVideoPoster).not.toHaveBeenCalled();
   });
 
@@ -100,8 +122,8 @@ describe("MediaLibraryWorkspace", () => {
 
     fireEvent.change(await screen.findByLabelText("เลือกไฟล์สื่อ"), { target: { files: [new File(["image"], "พร้อมส่ง.jpg", { type: "image/jpeg" })] } });
 
-    expect(await screen.findByText("กำลังอัปโหลดไป Google Drive…")).toBeVisible();
-    expect(screen.queryByText("พร้อมใช้ผ่าน Google Drive")).not.toBeInTheDocument();
+    expect(await screen.findByText("กำลังอัปโหลดไป Vercel Blob…")).toBeVisible();
+    expect(screen.queryByText("พร้อมใช้ผ่าน Vercel Blob")).not.toBeInTheDocument();
     await waitFor(() => expect(fetcher).toHaveBeenCalledWith("/api/media/upload", expect.objectContaining({ method: "POST" })));
     const uploadingAsset = (await repository.read()).media[0];
     expect(uploadingAsset).toMatchObject({ remoteStatus: "uploading", providerFileId: null, previewProviderFileId: null });
@@ -113,7 +135,7 @@ describe("MediaLibraryWorkspace", () => {
       remoteStatus: "ready",
     }));
 
-    expect(await screen.findByText("พร้อมใช้ผ่าน Google Drive")).toBeVisible();
+    expect(await screen.findByText("พร้อมใช้ผ่าน Vercel Blob")).toBeVisible();
     expect((await repository.read()).media[0]).toMatchObject({
       remoteStatus: "ready",
       providerFileId: "drive-original",
@@ -138,7 +160,24 @@ describe("MediaLibraryWorkspace", () => {
     const [asset] = (await repository.read()).media;
     expect(asset).toMatchObject({ remoteStatus: "local-only", providerFileId: null, previewProviderFileId: null });
     expect(await blobStore.get(asset.id)).not.toBeNull();
-    expect(screen.queryByRole("button", { name: `ลองอัปโหลด ${asset.name} อีกครั้ง` })).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: `ลองอัปโหลด ${asset.name} อีกครั้ง` })).toBeVisible();
+  });
+
+  it("can retry a local-only upload after Google Drive becomes available", async () => {
+    const now = "2026-09-18T00:00:00.000Z";
+    const state = createUploadedMedia(createEmptyDashboardState(), { id: "asset-local", name: "พร้อมอัปโหลด.jpg", mimeType: "image/jpeg", size: 5, now });
+    const fetcher = vi.fn()
+      .mockResolvedValueOnce(integrationHealth())
+      .mockResolvedValueOnce(Response.json({ assetId: "asset-local", providerFileId: "drive-ready", previewProviderFileId: "drive-ready", remoteStatus: "ready" }));
+    vi.stubGlobal("fetch", fetcher);
+    const blobStore = new TestBlobStore();
+    await blobStore.put("asset-local", new File(["image"], "พร้อมอัปโหลด.jpg", { type: "image/jpeg" }));
+    const { repository } = renderLibrary(state, new MemoryDashboardRepository(state), blobStore);
+
+    fireEvent.click(await screen.findByRole("button", { name: "ลองอัปโหลด พร้อมอัปโหลด.jpg อีกครั้ง" }));
+
+    expect(await screen.findByText("พร้อมใช้ผ่าน Vercel Blob")).toBeVisible();
+    expect((await repository.read()).media[0]).toMatchObject({ remoteStatus: "ready", providerFileId: "drive-ready" });
   });
 
   it("retains a failed local upload and retries without claiming provider success", async () => {
@@ -146,13 +185,13 @@ describe("MediaLibraryWorkspace", () => {
     state.integrations.find(({ provider }) => provider === "google-drive")!.status = "connected";
     const fetcher = vi.fn()
       .mockResolvedValueOnce(integrationHealth())
-      .mockResolvedValueOnce(Response.json({ error: "อัปโหลดไป Google Drive ไม่สำเร็จ" }, { status: 502 }));
+      .mockResolvedValueOnce(Response.json({ error: "อัปโหลดไป Vercel Blob ไม่สำเร็จ" }, { status: 502 }));
     vi.stubGlobal("fetch", fetcher);
     const { blobStore, repository } = renderLibrary(state);
 
     fireEvent.change(await screen.findByLabelText("เลือกไฟล์สื่อ"), { target: { files: [new File(["image"], "ลองใหม่.jpg", { type: "image/jpeg" })] } });
 
-    expect(await screen.findByText("อัปโหลดไป Google Drive ไม่สำเร็จ")).toBeVisible();
+    expect(await screen.findByText("อัปโหลดไป Vercel Blob ไม่สำเร็จ")).toBeVisible();
     const failedAsset = (await repository.read()).media[0];
     expect(failedAsset.remoteStatus).toBe("failed");
     expect(await blobStore.get(failedAsset.id)).not.toBeNull();
@@ -167,7 +206,7 @@ describe("MediaLibraryWorkspace", () => {
     }));
     fireEvent.click(screen.getByRole("button", { name: `ลองอัปโหลด ${failedAsset.name} อีกครั้ง` }));
 
-    expect(await screen.findByText("พร้อมใช้ผ่าน Google Drive")).toBeVisible();
+    expect(await screen.findByText("พร้อมใช้ผ่าน Vercel Blob")).toBeVisible();
     expect((await repository.read()).media[0]).toMatchObject({ remoteStatus: "ready", providerFileId: "drive-retry-original" });
   });
 
@@ -184,7 +223,7 @@ describe("MediaLibraryWorkspace", () => {
 
     fireEvent.click(await screen.findByRole("button", { name: "ลองอัปโหลด ค้าง.jpg อีกครั้ง" }));
 
-    expect(await screen.findByText("พร้อมใช้ผ่าน Google Drive")).toBeVisible();
+    expect(await screen.findByText("พร้อมใช้ผ่าน Vercel Blob")).toBeVisible();
     expect((await repository.read()).media[0]).toMatchObject({ remoteStatus: "ready", providerFileId: "drive-stuck" });
   });
 
@@ -208,7 +247,7 @@ describe("MediaLibraryWorkspace", () => {
     expect(fetcher).toHaveBeenCalledTimes(1);
     resolveHealth(integrationHealth());
 
-    expect(await screen.findByText("พร้อมใช้ผ่าน Google Drive")).toBeVisible();
+    expect(await screen.findByText("พร้อมใช้ผ่าน Vercel Blob")).toBeVisible();
     expect(fetcher).toHaveBeenCalledTimes(2);
     expect((await repository.read()).media[0]).toMatchObject({ remoteStatus: "ready", providerFileId: "drive-race" });
   });
@@ -232,15 +271,15 @@ describe("MediaLibraryWorkspace", () => {
     firstView.unmount();
     renderLibrary(await repository.read(), repository, blobStore);
 
-    expect(await screen.findByText("กำลังอัปโหลดไป Google Drive…")).toBeVisible();
+    expect(await screen.findByText("กำลังอัปโหลดไป Vercel Blob…")).toBeVisible();
     expect(screen.queryByRole("button", { name: "ลองอัปโหลด ข้ามหน้า.jpg อีกครั้ง" })).not.toBeInTheDocument();
-    resolveUpload(Response.json({ error: "อัปโหลดไป Google Drive ไม่สำเร็จ" }, { status: 502 }));
+    resolveUpload(Response.json({ error: "อัปโหลดไป Vercel Blob ไม่สำเร็จ" }, { status: 502 }));
 
     expect(await screen.findByRole("button", { name: "ลองอัปโหลด ข้ามหน้า.jpg อีกครั้ง" })).toBeVisible();
     fetcher.mockResolvedValueOnce(integrationHealth());
     fetcher.mockResolvedValueOnce(Response.json({ assetId: "asset-remount", providerFileId: "drive-remount", previewProviderFileId: "drive-remount", remoteStatus: "ready" }));
     fireEvent.click(screen.getByRole("button", { name: "ลองอัปโหลด ข้ามหน้า.jpg อีกครั้ง" }));
-    expect(await screen.findByText("พร้อมใช้ผ่าน Google Drive")).toBeVisible();
+    expect(await screen.findByText("พร้อมใช้ผ่าน Vercel Blob")).toBeVisible();
   });
 
   it("keeps the local blob when a provider-state write fails after metadata was committed", async () => {
@@ -259,7 +298,7 @@ describe("MediaLibraryWorkspace", () => {
 
     fireEvent.change(await screen.findByLabelText("เลือกไฟล์สื่อ"), { target: { files: [new File(["image"], "ยังต้องอยู่.jpg", { type: "image/jpeg" })] } });
 
-    expect(await screen.findByRole("alert")).toHaveTextContent("อัปโหลดไป Google Drive ไม่สำเร็จ");
+    expect(await screen.findByRole("alert")).toHaveTextContent("อัปโหลดไป Vercel Blob ไม่สำเร็จ");
     const [asset] = (await repository.read()).media;
     expect(asset.name).toBe("ยังต้องอยู่.jpg");
     expect(await blobStore.get(asset.id)).not.toBeNull();
@@ -281,7 +320,7 @@ describe("MediaLibraryWorkspace", () => {
 
     fireEvent.change(await screen.findByLabelText("เลือกไฟล์สื่อ"), { target: { files: [new File(["video"], "ตัวอย่าง.MP4", { type: "" })] } });
 
-    expect(await screen.findByText("พร้อมใช้ผ่าน Google Drive")).toBeVisible();
+    expect(await screen.findByText("พร้อมใช้ผ่าน Vercel Blob")).toBeVisible();
     expect(createVideoPoster).toHaveBeenCalledOnce();
   });
 });

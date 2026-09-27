@@ -3,6 +3,18 @@ import { describe, expect, it } from "vitest";
 import { AppShell } from "../app/AppShell";
 
 describe("AppShell", () => {
+  it("marks the navigation as a collapsible labelled rail", () => {
+    render(
+      <AppShell>
+        <main>content</main>
+      </AppShell>,
+    );
+
+    expect(screen.getByRole("navigation", { name: "เมนูแดชบอร์ด" })).toHaveClass("dashboard-nav");
+    expect(screen.getByRole("navigation", { name: "เมนูแดชบอร์ด" })).toHaveAttribute("data-collapsible", "true");
+    expect(screen.getByRole("button", { name: "ภาพรวมและเป้าหมาย" })).toHaveClass("rail-button");
+  });
+
   it("exposes labelled rail navigation and a workspace search field", () => {
     render(
       <AppShell>

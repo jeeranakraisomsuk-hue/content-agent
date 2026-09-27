@@ -1,10 +1,12 @@
 import type { GoogleDriveMediaClient } from "./google-drive-media-client";
+import { streamPrivateBlob } from "./blob-media-client";
 import { verifyMediaDeliveryUrl } from "./media-delivery-url";
 
 export type ProviderRouteContext = { params: Promise<{ fileId: string }> };
 
 type MediaProviderDependencies = {
   getClient: () => GoogleDriveMediaClient | null | Promise<GoogleDriveMediaClient | null>;
+  streamBlob?: (input: { pathname: string; range?: string }) => Promise<Response>;
   signingSecret: string;
   now?: () => number;
 };
@@ -29,6 +31,7 @@ function copySafeProviderHeaders(source: Headers): Headers {
 
 export function createMediaProviderHandler({
   getClient,
+  streamBlob = streamPrivateBlob,
   signingSecret,
   now = () => Math.floor(Date.now() / 1_000),
 }: MediaProviderDependencies) {
@@ -43,20 +46,26 @@ export function createMediaProviderHandler({
       return Response.json({ error: "ลิงก์สื่อไม่ถูกต้องหรือหมดอายุ" }, { status: 401 });
     }
 
-    const client = await getClient();
-    if (!client) {
-      return Response.json({ error: "ยังไม่ได้เชื่อมต่อ Google Drive" }, { status: 503 });
-    }
-
     try {
       const range = request.headers.get("range") ?? undefined;
-      const providerResponse = await client.streamFile({ fileId, range });
+      let providerResponse: Response;
+      if (fileId.startsWith("blob:")) {
+        const pathname = fileId.slice(5);
+        if (!/^media\/[a-zA-Z0-9_-]{1,120}\/[0-9a-f-]{36}\.[a-z0-9]{1,8}$/.test(pathname)) {
+          return Response.json({ error: "ไฟล์สื่อไม่ถูกต้อง" }, { status: 400 });
+        }
+        providerResponse = await streamBlob({ pathname, range });
+      } else {
+        const client = await getClient();
+        if (!client) return Response.json({ error: "ยังไม่ได้เชื่อมต่อ Google Drive" }, { status: 503 });
+        providerResponse = await client.streamFile({ fileId, range });
+      }
       return new Response(providerResponse.body, {
         status: providerResponse.status,
         headers: copySafeProviderHeaders(providerResponse.headers),
       });
     } catch {
-      return Response.json({ error: "อ่านไฟล์จาก Google Drive ไม่สำเร็จ" }, { status: 502 });
+      return Response.json({ error: "อ่านไฟล์จากที่เก็บสื่อไม่สำเร็จ" }, { status: 502 });
     }
   };
 }

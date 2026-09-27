@@ -1,27 +1,12 @@
 import type { DashboardTask } from "../dashboard-model";
-import { canSendToLine } from "../../content/send-eligibility";
 
 interface TaskDetailDrawerProps {
   task: DashboardTask | null;
   onClose: () => void;
-  onRequestSend: () => void;
-  connectionStatus: "loading" | "error" | "unauthenticated" | "connected" | "not_connected" | "disabled";
-  authenticatedAdmin: boolean;
 }
 
-export function TaskDetailDrawer({ task, onClose, onRequestSend, connectionStatus, authenticatedAdmin }: TaskDetailDrawerProps) {
+export function TaskDetailDrawer({ task, onClose }: TaskDetailDrawerProps) {
   if (!task) return null;
-  const connectedRecipient = connectionStatus === "connected";
-  const sendAsset = task.assets?.find((asset) => asset.remoteReady);
-  const canSend = canSendToLine({
-    assetState: sendAsset ? "ready" : task.assets?.length ? "uploading" : "missing",
-    caption: task.caption ?? "",
-    connectedRecipient,
-    authenticatedAdmin,
-    isSending: false,
-    assetType: sendAsset?.type,
-    previewReady: sendAsset?.previewReady ?? false,
-  });
 
   return (
     <aside className="task-drawer motion-material-surface motion-drawer" role="dialog" aria-modal="false" aria-label={`รายละเอียด ${task.title}`}>
@@ -56,17 +41,6 @@ export function TaskDetailDrawer({ task, onClose, onRequestSend, connectionStatu
         <h3 id="drawer-schedule-heading">กำหนดเผยแพร่</h3>
         <p><time>{task.scheduledTime}</time> · เลือกแพลตฟอร์มเมื่อชิ้นงานพร้อม</p>
       </section>
-
-      <div className="drawer-actions">
-        <button type="button" className="drawer-secondary-button">บันทึกร่าง</button>
-        <button type="button" className="drawer-delivery-button" onClick={onRequestSend} disabled={!canSend}>ส่งเข้า LINE OA</button>
-      </div>
-      {!authenticatedAdmin && connectionStatus === "unauthenticated" && <p role="status">เซสชันผู้ดูแลระบบหมดอายุ กรุณาเข้าสู่ระบบอีกครั้ง</p>}
-      {!authenticatedAdmin && connectionStatus === "loading" && <p role="status">กำลังตรวจสอบสิทธิ์ผู้ดูแลระบบ…</p>}
-      {authenticatedAdmin && connectionStatus === "loading" && <p role="status">กำลังตรวจสอบสถานะ LINE…</p>}
-      {authenticatedAdmin && connectionStatus === "error" && <p role="status">ตรวจสอบสถานะ LINE ไม่สำเร็จ ลองเปิด workspace LINE อีกครั้ง</p>}
-      {authenticatedAdmin && connectionStatus === "not_connected" && <p role="status">จับคู่ LINE OA ใน workspace งานที่ต้องแก้ก่อนจึงจะส่งได้</p>}
-      {authenticatedAdmin && connectionStatus === "disabled" && <p role="status">การเชื่อมต่อ LINE ถูกปิดไว้ เปิดใช้งานอีกครั้งก่อนส่ง</p>}
     </aside>
   );
 }
