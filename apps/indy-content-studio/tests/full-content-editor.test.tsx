@@ -9,7 +9,7 @@ import type { ContentItem } from "../features/domain/types";
 const source: ContentItem = {
   id: "content-original", title: "คอนเทนต์เดิม", categoryId: "category-knowledge", formatId: "format-video",
   owner: "ทีม", objective: "awareness", priority: "normal", plannedWorkAt: "2026-09-24", lastWorkedAt: null,
-  readyDate: null, productionStatus: "waiting-shoot", assetIds: [], processSteps: [], caption: "แคปชันเดิม",
+  readyDate: "2026-09-25", productionStatus: "waiting-shoot", assetIds: [], processSteps: [{ id: "step-1", name: "ตัดต่อ", scheduledDate: null, status: "todo", order: 0 }], caption: "แคปชันเดิม",
   captionSource: null, schedules: [], referenceIds: [], notes: "โน้ตเดิม", localApproval: "pending",
   lineReview: { status: "not-sent", activeCycleId: null, reviewCode: null, providerReceipts: [], lastEventAt: null, history: [] },
   createdAt: "2026-09-01T00:00:00.000Z", updatedAt: "2026-09-01T00:00:00.000Z", deletedAt: null,
@@ -24,6 +24,16 @@ function renderEditor() {
 }
 
 describe("full content editor", () => {
+  it("uses a date per production step, hides the standalone ready date, and styles recurring copies as a minimal action", async () => {
+    const { repository } = renderEditor();
+    expect(screen.queryByLabelText("วันที่พร้อมผลิต")).not.toBeInTheDocument();
+    fireEvent.change(await screen.findByLabelText("วันที่ขั้นตอน 1"), { target: { value: "2026-09-26" } });
+    expect(screen.getByRole("button", { name: "สร้างสำเนาตามรอบเวลา" })).toHaveClass("editor-repeat-button");
+    fireEvent.click(screen.getByRole("button", { name: "บันทึกคอนเทนต์" }));
+
+    await waitFor(async () => expect((await repository.read()).contents[0].processSteps[0].scheduledDate).toBe("2026-09-26"));
+  });
+
   it("edits the task name, production status, and calendar date", async () => {
     const { repository } = renderEditor();
     fireEvent.change(await screen.findByLabelText("ชื่อคอนเทนต์"), { target: { value: "ชื่อใหม่" } });

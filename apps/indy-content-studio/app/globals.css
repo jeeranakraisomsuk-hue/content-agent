@@ -427,8 +427,11 @@ button:disabled { opacity: .5; cursor: not-allowed; }
 .editor-actions-main button:last-child { background: var(--ink); color: #fffdfa; }
 .editor-actions-copy button[data-danger="true"] { background: rgba(201,120,104,.16); color: #8b4439; }
 .editor-step-list { display: grid; gap: 8px; grid-column: 1 / -1; }
-.editor-step-row { display: grid; grid-template-columns: minmax(0, 1fr) minmax(130px, .5fr) auto; gap: 8px; align-items: center; }
+.editor-step-row { display: grid; grid-template-columns: minmax(0, 1.15fr) minmax(130px, .8fr) minmax(130px, .8fr) auto; gap: 8px; align-items: center; }
 .editor-step-row button { padding: 7px 9px; }
+.content-editor-dialog .editor-repeat-button { display: inline-flex; width: fit-content; align-items: center; gap: 7px; padding: 8px 13px; border: 1px solid rgba(65,88,62,.24); border-radius: 999px; background: rgba(255,255,255,.5); color: var(--focus); box-shadow: 0 5px 14px rgba(73,58,44,.08); font-size: 12px; transition: background-color 140ms ease, border-color 140ms ease, transform 140ms ease; }
+.content-editor-dialog .editor-repeat-button:hover:not(:disabled) { border-color: rgba(65,88,62,.42); background: rgba(135,156,129,.16); transform: translateY(-1px); }
+.content-editor-dialog .editor-repeat-button:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
 .category-progress-section { display: grid; gap: 16px; }
 .category-progress-section h3, .category-progress-section p { margin: 0; }
 .category-progress-section h3 { font-size: 18px; }

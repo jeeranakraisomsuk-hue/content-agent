@@ -260,7 +260,6 @@ export function ContentEditorDialog({ mode, contentId, open, onClose }: {
         <fieldset>
           <legend>วันที่และรายละเอียดการผลิต</legend>
           <label>วันที่ลงในปฏิทิน<input type="date" value={draft.plannedWorkAt} onChange={(event) => patch({ plannedWorkAt: event.target.value })} /></label>
-          <label>วันที่พร้อมผลิต<input type="date" value={draft.readyDate} onChange={(event) => patch({ readyDate: event.target.value })} /></label>
           <label className="editor-wide">แคปชัน<textarea value={draft.caption} disabled={hasActivePublication} onChange={(event) => patch({ caption: event.target.value })} /></label>
           <p className="editor-helper">กำหนดวันและเวลาลงแยกตามช่องทาง</p>
           <PlatformScheduleFields schedules={draft.schedules} allowedPlatforms={getAllowedPlatforms(draft.formatId)} defaultDate={draft.plannedWorkAt.slice(0, 10)} disabled={hasActivePublication} onChange={(schedules) => patch({ schedules })} />
@@ -270,6 +269,7 @@ export function ContentEditorDialog({ mode, contentId, open, onClose }: {
             {draft.processSteps.map((step, index) => (
               <div className="editor-step-row" key={step.id}>
                 <label>ขั้นตอน {index + 1}<input value={step.name} onChange={(event) => patch({ processSteps: draft.processSteps.map((current) => current.id === step.id ? { ...current, name: event.target.value } : current) })} /></label>
+                <label>วันที่ขั้นตอน {index + 1}<input aria-label={`วันที่ขั้นตอน ${index + 1}`} type="date" value={step.scheduledDate ?? ""} onChange={(event) => patch({ processSteps: draft.processSteps.map((current) => current.id === step.id ? { ...current, scheduledDate: event.target.value || null } : current) })} /></label>
                 <label>สถานะขั้นตอน<select value={step.status} onChange={(event) => patch({ processSteps: draft.processSteps.map((current) => current.id === step.id ? { ...current, status: event.target.value as typeof step.status } : current) })}><option value="todo">ยังไม่เริ่ม</option><option value="doing">กำลังทำ</option><option value="done">เสร็จแล้ว</option></select></label>
                 <button type="button" aria-label={`ลบขั้นตอน ${step.name}`} onClick={() => patch({ processSteps: draft.processSteps.filter((current) => current.id !== step.id) })}>ลบขั้นตอน</button>
               </div>
@@ -311,7 +311,7 @@ export function ContentEditorDialog({ mode, contentId, open, onClose }: {
           <label>รูปแบบการทำซ้ำ<select aria-label="รูปแบบการทำซ้ำ" value={repeatCadence} onChange={(event) => setRepeatCadence(event.target.value as CopyCadence)}><option value="daily">ทุกวัน</option><option value="every-other-day">วันเว้นวัน</option><option value="weekdays">จันทร์–ศุกร์</option></select></label>
           <label>เริ่มหลังวันที่ (ถ้าไม่กรอกจะใช้วันที่งาน)<input aria-label="วันที่เริ่มสำเนา" type="date" value={repeatStartDate} onChange={(event) => setRepeatStartDate(event.target.value)} /></label>
           <p className="editor-helper">วันที่สำเนา: {repeatPreview.length ? repeatPreview.join(", ") : "กรอกวันที่เริ่มต้นก่อน"}</p>
-          <button type="button" onClick={() => void repeatTask()} disabled={isSaving || !repeatPreview.length}>สร้างสำเนาตามรอบเวลา</button>
+          <button className="editor-repeat-button" type="button" onClick={() => void repeatTask()} disabled={isSaving || !repeatPreview.length}>สร้างสำเนาตามรอบเวลา</button>
         </fieldset>}
 
         <div className="settings-dialog-actions">
