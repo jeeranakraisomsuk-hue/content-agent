@@ -1,18 +1,20 @@
-import { fireEvent, render, screen } from "@testing-library/react";
+import { fireEvent, render, screen, within } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
 import { AppShell } from "../app/AppShell";
 
 describe("AppShell", () => {
-  it("marks the navigation as a collapsible labelled rail", () => {
+  it("keeps full navigation labels available without a collapsed-only mode", () => {
     render(
       <AppShell>
         <main>content</main>
       </AppShell>,
     );
 
-    expect(screen.getByRole("navigation", { name: "เมนูแดชบอร์ด" })).toHaveClass("dashboard-nav");
-    expect(screen.getByRole("navigation", { name: "เมนูแดชบอร์ด" })).toHaveAttribute("data-collapsible", "true");
-    expect(screen.getByRole("button", { name: "ภาพรวมและเป้าหมาย" })).toHaveClass("rail-button");
+    const navigation = screen.getByRole("navigation", { name: "เมนูแดชบอร์ด" });
+    expect(navigation).toHaveClass("dashboard-nav");
+    expect(navigation).not.toHaveAttribute("data-collapsible");
+    expect(within(navigation).getByText("ภาพรวมและเป้าหมาย")).toBeVisible();
+    expect(within(navigation).getByText("ตั้งค่าและข้อมูล")).toBeVisible();
   });
 
   it("exposes labelled rail navigation and a workspace search field", () => {

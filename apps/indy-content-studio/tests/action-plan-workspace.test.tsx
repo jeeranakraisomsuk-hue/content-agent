@@ -5,24 +5,70 @@ import { DashboardDataProvider } from "../features/data/DashboardDataProvider";
 import { MemoryDashboardRepository } from "../features/data/memory-dashboard-repository";
 import { createEmptyDashboardState } from "../features/domain/create-empty-state";
 
-function createRepository() {
+function createRepository({ includeStandalone = false }: { includeStandalone?: boolean } = {}) {
   const state = createEmptyDashboardState();
   state.contents.push({
     id: "content-1", title: "ถ่ายคลิป", categoryId: "category-knowledge", formatId: "format-video",
-    owner: "ทีม", objective: "awareness", priority: "normal", plannedWorkAt: null,
+    owner: "colofill", objective: "awareness", priority: "normal", plannedWorkAt: null,
     lastWorkedAt: null, readyDate: null, productionStatus: "waiting-shoot", assetIds: [],
     processSteps: [
       { id: "step-1", name: "ตัดต่อ", scheduledDate: "2026-09-24", status: "todo", order: 0 },
       { id: "step-2", name: "เตรียมภาพ", scheduledDate: null, status: "todo", order: 1 },
     ],
+    caption: "", captionSource: null, schedules: [
+      { platform: "facebook", enabled: true, publishAt: "2026-09-24T09:00:00+07:00", latestAttemptId: null, manualEvidence: null },
+      { platform: "instagram", enabled: true, publishAt: "2026-09-25T13:30:00+07:00", latestAttemptId: null, manualEvidence: null },
+      { platform: "tiktok", enabled: false, publishAt: "2026-09-26T10:00:00+07:00", latestAttemptId: null, manualEvidence: null },
+    ], referenceIds: [], notes: "",
+    localApproval: "pending", lineReview: { status: "not-sent", activeCycleId: null, reviewCode: null,
+      providerReceipts: [], lastEventAt: null, history: [] }, createdAt: "now", updatedAt: "now", deletedAt: null,
+  });
+  state.contents.push({
+    id: "content-2", title: "รีวิวสินค้า", categoryId: "category-review", formatId: "format-video",
+    owner: "Misschilli", objective: "awareness", priority: "normal", plannedWorkAt: null,
+    lastWorkedAt: null, readyDate: null, productionStatus: "editing", assetIds: [],
+    processSteps: [{ id: "step-3", name: "ตรวจแคปชัน", scheduledDate: "2026-09-24", status: "doing", order: 0 }],
     caption: "", captionSource: null, schedules: [], referenceIds: [], notes: "",
     localApproval: "pending", lineReview: { status: "not-sent", activeCycleId: null, reviewCode: null,
       providerReceipts: [], lastEventAt: null, history: [] }, createdAt: "now", updatedAt: "now", deletedAt: null,
   });
+  if (includeStandalone) state.actionTasks.push({ id: "standalone-1", title: "ซื้อพร็อพ", scheduledDate: "2026-09-24", status: "todo", createdAt: "now", updatedAt: "now" });
   return new MemoryDashboardRepository(state);
 }
 
 describe("ActionPlanWorkspace", () => {
+  it("filters by the selected owner, keeps summaries in sync, and offers names from settings", async () => {
+    render(<DashboardDataProvider repository={createRepository({ includeStandalone: true })}><ActionPlanWorkspace /></DashboardDataProvider>);
+    fireEvent.change(await screen.findByLabelText("วันที่อ้างอิง"), { target: { value: "2026-09-24" } });
+
+    const ownerFilter = screen.getByRole("combobox", { name: "กรองผู้รับผิดชอบ" });
+    expect(within(ownerFilter).getByRole("option", { name: "รวมทุกคน" })).toBeInTheDocument();
+    expect(within(ownerFilter).getByRole("option", { name: "colofill" })).toBeInTheDocument();
+    expect(within(ownerFilter).getByRole("option", { name: "Misschilli" })).toBeInTheDocument();
+    expect(screen.getByRole("checkbox", { name: "ทำเสร็จ ตัดต่อ — ถ่ายคลิป" })).toBeVisible();
+    expect(screen.getByRole("checkbox", { name: "ทำเสร็จ ตรวจแคปชัน — รีวิวสินค้า" })).toBeVisible();
+    expect(screen.getByRole("checkbox", { name: "ทำเสร็จ ซื้อพร็อพ" })).toBeVisible();
+
+    fireEvent.change(ownerFilter, { target: { value: "Misschilli" } });
+
+    expect(screen.getByRole("checkbox", { name: "ทำเสร็จ ตรวจแคปชัน — รีวิวสินค้า" })).toBeVisible();
+    expect(screen.queryByRole("checkbox", { name: "ทำเสร็จ ตัดต่อ — ถ่ายคลิป" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("checkbox", { name: "ทำเสร็จ ซื้อพร็อพ" })).not.toBeInTheDocument();
+    expect(screen.getByLabelText("สรุปสถานะขั้นตอน")).toHaveTextContent("รอทำ 0");
+    expect(screen.getByLabelText("สรุปสถานะขั้นตอน")).toHaveTextContent("กำลังทำ 1");
+  });
+
+  it("shows the content title and enabled social publication date and time on its action step", async () => {
+    render(<DashboardDataProvider repository={createRepository()}><ActionPlanWorkspace /></DashboardDataProvider>);
+    fireEvent.change(await screen.findByLabelText("วันที่อ้างอิง"), { target: { value: "2026-09-24" } });
+
+    const step = screen.getByRole("checkbox", { name: "ทำเสร็จ ตัดต่อ — ถ่ายคลิป" }).closest("li");
+    expect(step).toHaveTextContent("ถ่ายคลิป");
+    expect(step).toHaveTextContent("Facebook · 24 ก.ย. 09:00");
+    expect(step).toHaveTextContent("Instagram · 25 ก.ย. 13:30");
+    expect(step).not.toHaveTextContent("TikTok");
+  });
+
   it("opens a My Day list with suggestions beside it", async () => {
     render(<DashboardDataProvider repository={createRepository()}><ActionPlanWorkspace /></DashboardDataProvider>);
     fireEvent.change(await screen.findByLabelText("วันที่อ้างอิง"), { target: { value: "2026-09-24" } });

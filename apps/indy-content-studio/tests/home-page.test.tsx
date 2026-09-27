@@ -44,8 +44,10 @@ describe("HomePage", () => {
     fireEvent.click(screen.getByRole("button", { name: "สร้างชิ้นงานใหม่" }));
     expect(screen.queryByLabelText("ไฟล์แนบ")).not.toBeInTheDocument();
     expect(screen.queryByLabelText("แคปชัน")).not.toBeInTheDocument();
+    await screen.findByRole("option", { name: "colofill" });
     fireEvent.change(screen.getByLabelText("ชื่อชิ้นงาน"), { target: { value: "งานตามแผน" } });
     fireEvent.change(screen.getByLabelText("วันที่ลงในปฏิทิน"), { target: { value: "2026-09-23" } });
+    fireEvent.change(screen.getByLabelText("ผู้รับผิดชอบ"), { target: { value: "colofill" } });
     fireEvent.click(screen.getByRole("button", { name: "สร้างงาน" }));
 
     await waitFor(async () => {
@@ -74,6 +76,7 @@ describe("HomePage", () => {
     fireEvent.change(await screen.findByLabelText("ชื่อชิ้นงาน"), { target: { value: "คลิปเบื้องหลัง" } });
     fireEvent.change(screen.getByLabelText("ประเภทคอนเทนต์"), { target: { value: "เบื้องหลัง" } });
     fireEvent.change(screen.getByLabelText("รูปแบบการนำเสนอ"), { target: { value: "คลิปแนวตั้ง" } });
+    fireEvent.change(screen.getByLabelText("ผู้รับผิดชอบ"), { target: { value: "colofill" } });
     fireEvent.click(screen.getByRole("button", { name: "สร้างงาน" }));
 
     await waitFor(async () => expect((await repository.read()).contents[0]).toMatchObject({
@@ -163,6 +166,7 @@ describe("HomePage", () => {
     expect(await screen.findByRole("dialog", { name: "สร้างคอนเทนต์" })).toBeVisible();
 
     fireEvent.change(screen.getByLabelText("ชื่อชิ้นงาน"), { target: { value: "งานจากปฏิทิน" } });
+    fireEvent.change(screen.getByLabelText("ผู้รับผิดชอบ"), { target: { value: "colofill" } });
     fireEvent.click(screen.getByRole("button", { name: "สร้างงาน" }));
 
     await waitFor(async () => expect((await repository.read()).contents.map((content) => content.title)).toContain("งานจากปฏิทิน"));

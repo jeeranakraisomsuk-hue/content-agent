@@ -2,18 +2,39 @@
 
 import { useMemo, useState, type FormEvent } from "react";
 import { useDashboardData } from "../../data/DashboardDataProvider";
-import type { StepStatus } from "../../domain/types";
+import type { Platform, StepStatus } from "../../domain/types";
+import { formatBangkokSchedule } from "../../calendar/schedule-time";
 import { addStandaloneActionTask, rescheduleProcessStep, rescheduleStandaloneActionTask, setProcessStepStatus, setStandaloneActionTaskStatus } from "../action-plan-commands";
 import { selectActionPlan, selectActionPlanEntries, type ActionPlanEntry } from "../action-plan-selectors";
 
 const WEEKDAYS = ["จันทร์", "อังคาร", "พุธ", "พฤหัส", "ศุกร์", "เสาร์", "อาทิตย์"];
 const STATUS_LABELS: Record<StepStatus, string> = { todo: "รอทำ", doing: "กำลังทำ", done: "เสร็จแล้ว" };
+const PLATFORM_LABELS: Record<Platform, string> = { facebook: "Facebook", instagram: "Instagram", tiktok: "TikTok" };
 
 type ActionStep = ActionPlanEntry;
 type ActionDay = ReturnType<typeof selectActionPlan>["days"][number];
 
 function stepKey(step: ActionStep): string {
   return step.kind === "standalone" ? `standalone:${step.id}` : `${step.contentId}:${step.id}`;
+}
+
+function publicationScheduleLabel(step: ActionStep): string {
+  if (step.kind !== "content-step") return "";
+  if (!step.publicationSchedules?.length) return "ยังไม่กำหนดวัน–เวลาโพสต์";
+
+  return step.publicationSchedules.map(({ platform, publishAt }) => {
+    try {
+      const { date, time } = formatBangkokSchedule(publishAt);
+      const dayMonth = new Intl.DateTimeFormat("th-TH", {
+        day: "numeric",
+        month: "short",
+        timeZone: "Asia/Bangkok",
+      }).format(new Date(`${date}T00:00:00+07:00`));
+      return `${PLATFORM_LABELS[platform]} · ${dayMonth} ${time}`;
+    } catch {
+      return `${PLATFORM_LABELS[platform]} · ตรวจวันเวลา`;
+    }
+  }).join("  |  ");
 }
 
 function calendarRows(days: ActionDay[], mode: "week" | "month"): (ActionDay | null)[][] {
@@ -36,12 +57,16 @@ export function ActionPlanWorkspace() {
   const [optimisticStatuses, setOptimisticStatuses] = useState<Record<string, StepStatus>>({});
   const [pendingKey, setPendingKey] = useState<string | null>(null);
   const [saveError, setSaveError] = useState<string | null>(null);
+  const [selectedOwner, setSelectedOwner] = useState("");
+  const ownerOptions = dashboard.state?.ownerOptions ?? [];
+  const ownerFilter = ownerOptions.includes(selectedOwner) ? selectedOwner : "";
+  const filters = ownerFilter ? { owner: ownerFilter } : undefined;
   const view = useMemo(
-    () => dashboard.state ? selectActionPlan(dashboard.state, { mode: mode === "today" ? "week" : mode, anchorDate: anchor }) : null,
-    [dashboard.state, mode, anchor],
+    () => dashboard.state ? selectActionPlan(dashboard.state, { mode: mode === "today" ? "week" : mode, anchorDate: anchor, filters }) : null,
+    [dashboard.state, mode, anchor, ownerFilter],
   );
 
-  const allEntries = useMemo(() => dashboard.state ? selectActionPlanEntries(dashboard.state) : [], [dashboard.state]);
+  const allEntries = useMemo(() => dashboard.state ? selectActionPlanEntries(dashboard.state, filters) : [], [dashboard.state, ownerFilter]);
 
   if (!view) return <section><h1>Action Plan</h1><p>กำลังโหลดข้อมูล…</p></section>;
 
@@ -120,7 +145,7 @@ export function ActionPlanWorkspace() {
             disabled={pendingKey === key}
             onChange={(event) => void updateStatus(step, event.target.checked ? "done" : "todo")}
           />
-          <span><strong>{step.name}</strong>{step.kind === "content-step" && <small>{step.contentTitle}</small>}</span>
+        <span><strong>{step.name}</strong>{step.kind === "content-step" && <><small>{step.contentTitle}</small><small className="action-step-schedule">{publicationScheduleLabel(step)}</small></>}</span>
         </label>
         <span className="action-step-status">{STATUS_LABELS[status]}</span>
         {status === "todo" && <button type="button" disabled={pendingKey === key} onClick={() => void updateStatus(step, "doing")}>เริ่มทำ</button>}
@@ -134,7 +159,7 @@ export function ActionPlanWorkspace() {
       <h3>{title}</h3>
       <ul>{steps.map((step) => <li key={stepKey(step)}>
         <span className="action-suggestion-circle" aria-hidden="true" />
-        <span className="action-suggestion-copy"><strong>{step.name}</strong><small>{step.kind === "standalone" ? "งานทั่วไป" : step.contentTitle}{step.scheduledDate ? ` · ${step.scheduledDate}` : ""}</small></span>
+        <span className="action-suggestion-copy"><strong>{step.name}</strong><small>{step.kind === "standalone" ? "งานทั่วไป" : step.contentTitle}{step.scheduledDate ? ` · ${step.scheduledDate}` : ""}</small>{step.kind === "content-step" && <small className="action-step-schedule">{publicationScheduleLabel(step)}</small>}</span>
         <button type="button" aria-label={`เพิ่มเข้าวันนี้ ${step.name}${step.kind === "content-step" ? ` — ${step.contentTitle}` : ""}`} disabled={pendingSuggestion === stepKey(step)} onClick={() => void addSuggestion(step)}>+</button>
       </li>)}</ul>
     </section>;
@@ -157,6 +182,10 @@ export function ActionPlanWorkspace() {
           setAnchor(event.target.value);
           setSelectedDate(event.target.value);
         }} /></label>
+        <label className="action-plan-owner-filter">ผู้รับผิดชอบ<select aria-label="กรองผู้รับผิดชอบ" value={ownerFilter} onChange={(event) => setSelectedOwner(event.target.value)}>
+          <option value="">รวมทุกคน</option>
+          {ownerOptions.map((owner) => <option key={owner} value={owner}>{owner}</option>)}
+        </select></label>
         <div className="action-summary" aria-label="สรุปสถานะขั้นตอน">
           <span>รอทำ <strong>{view.summary.todo}</strong></span>
           <span>กำลังทำ <strong>{view.summary.doing}</strong></span>

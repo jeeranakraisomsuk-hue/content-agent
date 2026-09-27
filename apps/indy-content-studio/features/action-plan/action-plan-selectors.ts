@@ -1,4 +1,5 @@
-import type { DashboardState, StepStatus } from "../domain/types";
+import { compareScheduleTimestamps } from "../calendar/schedule-time";
+import type { DashboardState, Platform, StepStatus } from "../domain/types";
 
 export interface ActionPlanEntry {
   kind: "content-step" | "standalone";
@@ -10,6 +11,7 @@ export interface ActionPlanEntry {
   contentId?: string;
   contentTitle?: string;
   owner?: string;
+  publicationSchedules?: { platform: Platform; publishAt: string }[];
 }
 
 export function selectActionPlanEntries(state: DashboardState, filters?: { owner?: string; status?: StepStatus }): ActionPlanEntry[] {
@@ -23,6 +25,10 @@ export function selectActionPlanEntries(state: DashboardState, filters?: { owner
         contentId: content.id,
         contentTitle: content.title,
         owner: content.owner,
+        publicationSchedules: content.schedules
+          .filter((schedule) => schedule.enabled && schedule.publishAt)
+          .sort((left, right) => compareScheduleTimestamps(left.publishAt!, right.publishAt!))
+          .map(({ platform, publishAt }) => ({ platform, publishAt: publishAt! })),
       })));
   const standaloneTasks = !filters?.owner
     ? (state.actionTasks ?? []).filter((task) => !filters?.status || task.status === filters.status).map((task): ActionPlanEntry => ({

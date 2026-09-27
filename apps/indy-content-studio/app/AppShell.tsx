@@ -20,7 +20,7 @@ export type WorkspaceItem = (typeof navigationItems)[number]["id"];
 export function AppShell({ children, activeItem = "overview", onNavigate }: { children: ReactNode; activeItem?: WorkspaceItem; onNavigate?: (item: WorkspaceItem) => void }) {
   return (
     <div className="app-shell">
-      <nav className="dashboard-nav" data-collapsible="true" aria-label="เมนูแดชบอร์ด">
+      <nav className="dashboard-nav" aria-label="เมนูแดชบอร์ด">
         <div className="rail-brand" aria-label="INDY Content Studio">I</div>
         {navigationItems.map(({ id, label, icon }) => (
           <button key={id} type="button" className="rail-button" aria-label={label} aria-current={activeItem === id ? "page" : undefined} data-tooltip={label} onClick={() => onNavigate?.(id)}>
