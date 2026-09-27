@@ -58,6 +58,7 @@ export function ActionPlanWorkspace() {
   const [pendingKey, setPendingKey] = useState<string | null>(null);
   const [saveError, setSaveError] = useState<string | null>(null);
   const [selectedOwner, setSelectedOwner] = useState("");
+  const [quickOwner, setQuickOwner] = useState("");
   const [editingKey, setEditingKey] = useState<string | null>(null);
   const [editName, setEditName] = useState("");
   const [editDate, setEditDate] = useState("");
@@ -87,12 +88,12 @@ export function ActionPlanWorkspace() {
 
   async function addQuickTask(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (!quickTitle.trim() || isAdding) return;
+    if (!quickTitle.trim() || !quickOwner || isAdding) return;
     setIsAdding(true);
     setSaveError(null);
     try {
       await dashboard.mutate((state) => addStandaloneActionTask(state, {
-        title: quickTitle, date: anchor, owner: ownerFilter || null, id: `content-${crypto.randomUUID()}`, now: new Date().toISOString(),
+        title: quickTitle, date: anchor, owner: quickOwner, id: `content-${crypto.randomUUID()}`, now: new Date().toISOString(),
       }));
       setQuickTitle("");
     } catch (error) {
@@ -257,7 +258,7 @@ export function ActionPlanWorkspace() {
           setAnchor(event.target.value);
           setSelectedDate(event.target.value);
         }} /></label>
-        <label className="action-plan-owner-filter">ผู้รับผิดชอบ<select aria-label="กรองผู้รับผิดชอบ" value={ownerFilter} onChange={(event) => setSelectedOwner(event.target.value)}>
+        <label className="action-plan-owner-filter">ผู้รับผิดชอบ<select aria-label="กรองผู้รับผิดชอบ" value={ownerFilter} onChange={(event) => { setSelectedOwner(event.target.value); setQuickOwner(event.target.value); }}>
           <option value="">รวมทุกคน</option>
           {ownerOptions.map((owner) => <option key={owner} value={owner}>{owner}</option>)}
         </select></label>
@@ -274,7 +275,11 @@ export function ActionPlanWorkspace() {
           <form className="action-quick-add" onSubmit={(event) => void addQuickTask(event)}>
             <span aria-hidden="true">○</span>
             <input type="text" aria-label="เพิ่มงานทั่วไป" placeholder="เพิ่มงานทั่วไป เช่น ถ่ายรูป หรือซื้อของ" value={quickTitle} onChange={(event) => setQuickTitle(event.target.value)} disabled={isAdding} />
-            <button type="submit" disabled={isAdding || !quickTitle.trim()}>{isAdding ? "กำลังเพิ่ม…" : "เพิ่มงาน"}</button>
+            <label className="action-quick-add-owner">สร้างในชื่อ<select aria-label="ผู้รับผิดชอบงานใหม่" value={quickOwner} onChange={(event) => setQuickOwner(event.target.value)} disabled={isAdding}>
+              <option value="">เลือกชื่อ</option>
+              {ownerOptions.map((owner) => <option key={owner} value={owner}>{owner}</option>)}
+            </select></label>
+            <button type="submit" disabled={isAdding || !quickTitle.trim() || !quickOwner}>{isAdding ? "กำลังเพิ่ม…" : "เพิ่มงาน"}</button>
           </form>
           {todaySteps.length > 0
             ? <ul className="action-step-list action-today-list">{todaySteps.map(renderStep)}</ul>

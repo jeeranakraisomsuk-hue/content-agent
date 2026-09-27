@@ -99,6 +99,7 @@ describe("ActionPlanWorkspace", () => {
     const repository = createRepository();
     render(<DashboardDataProvider repository={repository}><ActionPlanWorkspace /></DashboardDataProvider>);
     fireEvent.change(await screen.findByLabelText("วันที่อ้างอิง"), { target: { value: "2026-09-24" } });
+    fireEvent.change(screen.getByRole("combobox", { name: "ผู้รับผิดชอบงานใหม่" }), { target: { value: "colofill" } });
     fireEvent.change(screen.getByRole("textbox", { name: "เพิ่มงานทั่วไป" }), { target: { value: "ตรวจงานใหม่" } });
     fireEvent.click(screen.getByRole("button", { name: "เพิ่มงาน" }));
 
@@ -110,6 +111,22 @@ describe("ActionPlanWorkspace", () => {
     fireEvent.click(checkbox);
     await waitFor(() => expect(checkbox).toBeChecked());
     expect((await repository.read()).actionTasks[0].status).toBe("done");
+  });
+
+  it("requires a responsible owner when adding from the all-people view", async () => {
+    const repository = createRepository();
+    render(<DashboardDataProvider repository={repository}><ActionPlanWorkspace /></DashboardDataProvider>);
+    fireEvent.change(await screen.findByLabelText("วันที่อ้างอิง"), { target: { value: "2026-09-24" } });
+    const titleInput = screen.getByRole("textbox", { name: "เพิ่มงานทั่วไป" });
+    const ownerInput = screen.getByRole("combobox", { name: "ผู้รับผิดชอบงานใหม่" });
+    const addButton = screen.getByRole("button", { name: "เพิ่มงาน" });
+    fireEvent.change(titleInput, { target: { value: "ถ่ายเบื้องหลัง" } });
+    expect(addButton).toBeDisabled();
+    fireEvent.change(ownerInput, { target: { value: "Misschilli" } });
+    fireEvent.click(addButton);
+
+    expect(await screen.findByRole("checkbox", { name: "ทำเสร็จ ถ่ายเบื้องหลัง" })).toBeVisible();
+    expect((await repository.read()).actionTasks).toEqual([expect.objectContaining({ title: "ถ่ายเบื้องหลัง", owner: "Misschilli" })]);
   });
 
   it("assigns a quick-added task to the selected owner and hides it from other owners", async () => {
